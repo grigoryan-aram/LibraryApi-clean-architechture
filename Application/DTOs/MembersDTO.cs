@@ -2,8 +2,8 @@
 {
     public class MembersDTO
     {
-        public int id { get; set; }
-        public string Name { get; set; } = string.Empty;
+        public int id { get; init; }
+        public string Name { get; init; } = string.Empty;
 
     }
 }

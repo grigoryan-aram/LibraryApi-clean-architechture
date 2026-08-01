@@ -3,12 +3,10 @@
 
     public class BooksDTO
     {
-
-
-        public string Title { get; set; } = string.Empty;
-        public string Author { get; set; } = string.Empty;
-        public bool IsBorrowed { get; set; }
-        public int CategoryId { get; set; }
+        public string Title { get; init; } = string.Empty;
+        public string Author { get; init; } = string.Empty;
+        public bool IsBorrowed { get; init; }
+        public int CategoryId { get; init; }
     }
 }
 

@@ -29,7 +29,8 @@ public class BooksController : ControllerBase
     {
         var result = await _sender.Send(new GetAllBooksQuery());
 
-        return result.Match(books => Ok(books), errors => Problem(title: errors.First().Description));
+        return result.Match(books => Ok(books),
+               errors => Problem(title: errors.First().Description));
     }
 
 
@@ -38,7 +39,8 @@ public class BooksController : ControllerBase
     {
         var result = await _sender.Send(new GetBookByIdQuery(id));
 
-        return result.Match(book => Ok(book), errors => Problem(title: errors.First().Description));
+        return result.Match(book => Ok(book),
+               errors => Problem(title: errors.First().Description));
     }
 
 
@@ -48,7 +50,8 @@ public class BooksController : ControllerBase
 
         var result = await _sender.Send(command);
 
-        return result.Match(book => Ok(book), errors => Problem(title: errors.First().Description));
+        return result.Match(book => Ok(book),
+               errors => Problem(title: errors.First().Description));
     }
 
     [HttpDelete("{id}")]
@@ -57,8 +60,8 @@ public class BooksController : ControllerBase
         var result = await _sender.Send(new DeleteBookCommand(id));
 
         return result.Match<IActionResult>(
-    _ => NoContent(),
-    errors => Problem(title: errors.First().Description));
+        _ => NoContent(),
+        errors => Problem(title: errors.First().Description));
     }
 
 }

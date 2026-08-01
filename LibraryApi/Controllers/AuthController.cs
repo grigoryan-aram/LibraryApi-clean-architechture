@@ -23,15 +23,17 @@ namespace LibraryApi.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDTO request)
         {
-            await _sender.Send(new RegisterCommand(
+            var result = await _sender.Send(new RegisterCommand(
                 request.Username,
                 request.Password,
                 request.Email));
 
-            return Ok(new
-            {
-                Message = "User registered successfully"
-            });
+            return result.Match(
+                _ => Ok(new
+                {
+                    Message = "User registered successfully"
+                }),
+                errors => Problem(title: errors.First().Description));
         }
 
         [HttpPost("login")]
@@ -44,9 +46,16 @@ namespace LibraryApi.Controllers
                 lockoutOnFailure: false);
 
             if (!result.Succeeded)
-                return Unauthorized("Invalid login");
+            {
+                return Problem(
+                    title: "Invalid login",
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
 
-            return Ok("Login successful");
+            return Ok(new
+            {
+                Message = "Login successful"
+            });
         }
     }
 }

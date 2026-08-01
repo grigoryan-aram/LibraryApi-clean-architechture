@@ -22,35 +22,40 @@ public class CategoriesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetCategories()
     {
-        var categories = await _sender.Send(new GetAllCategorysQuery());
+        var result = await _sender.Send(new GetAllCategorysQuery());
 
-        return Ok(categories);
+        return result.Match(
+            categories => Ok(categories),
+            errors => Problem(title: errors.First().Description));
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetCategoryById(int id)
     {
-        var category = await _sender.Send(new GetCategoryByIdQuery(id));
+        var result = await _sender.Send(new GetCategoryByIdQuery(id));
 
-        return Ok(category);
+        return result.Match(
+            category => Ok(category),
+            errors => Problem(title: errors.First().Description));
     }
-
-
 
     [HttpPost]
     public async Task<IActionResult> AddCategory(AddCategoryCommand command)
     {
-        var category = await _sender.Send(command);
+        var result = await _sender.Send(command);
 
-        return Ok(category);
+        return result.Match(
+            category => Ok(category),
+            errors => Problem(title: errors.First().Description));
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCategory(int id)
     {
-        await _sender.Send(new DeleteCategoryCommand(id));
+        var result = await _sender.Send(new DeleteCategoryCommand(id));
 
-        return NoContent();
+        return result.Match<IActionResult>(
+            _ => NoContent(),
+            errors => Problem(title: errors.First().Description));
     }
-
 }

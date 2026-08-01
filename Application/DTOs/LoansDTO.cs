@@ -3,9 +3,9 @@
     public class LoansDTO
     {
 
-        public int BookId { get; set; }
-        public int MemberId { get; set; }
-        public DateTime BorrowedAt { get; set; }
-        public DateTime? ReturnedAt { get; set; }
+        public int BookId { get; init; }
+        public int MemberId { get; init; }
+        public DateTime BorrowedAt { get; init; }
+        public DateTime? ReturnedAt { get; init; }
     }
 }

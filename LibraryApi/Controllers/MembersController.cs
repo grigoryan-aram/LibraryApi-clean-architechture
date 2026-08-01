@@ -14,49 +14,48 @@ public class MembersController : ControllerBase
 {
     private readonly ISender _sender;
 
-
     public MembersController(ISender sender)
     {
         _sender = sender;
     }
+
     [HttpGet]
     public async Task<IActionResult> GetMembers()
     {
         var result = await _sender.Send(new GetAllMembersQuery());
 
-        return Ok(result);
+        return result.Match(
+            members => Ok(members),
+            errors => Problem(title: errors.First().Description));
     }
-
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetMemberById(int id)
     {
         var result = await _sender.Send(new GetMemberByIdQuery(id));
 
-        return Ok(result);
-
+        return result.Match(
+            member => Ok(member),
+            errors => Problem(title: errors.First().Description));
     }
-
 
     [HttpPost]
     public async Task<IActionResult> AddMember(AddMemberCommand command)
     {
-
         var result = await _sender.Send(command);
 
-        return Ok(result);
-
+        return result.Match(
+            member => Ok(member),
+            errors => Problem(title: errors.First().Description));
     }
-
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteMember(int id)
     {
+        var result = await _sender.Send(new DeleteMemberCommand(id));
 
-        await _sender.Send(new DeleteMemberCommand(id));
-
-        return NoContent();
-
+        return result.Match<IActionResult>(
+            _ => NoContent(),
+            errors => Problem(title: errors.First().Description));
     }
 }
-

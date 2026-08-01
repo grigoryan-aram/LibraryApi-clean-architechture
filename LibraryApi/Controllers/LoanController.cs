@@ -13,8 +13,6 @@ namespace LibraryApi.Controllers;
 [Route("api/[controller]")]
 public class LoansController : ControllerBase
 {
-
-
     private readonly ISender _sender;
 
     public LoansController(ISender sender)
@@ -25,37 +23,40 @@ public class LoansController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetLoans()
     {
+        var result = await _sender.Send(new GetAllLoansQuery());
 
-        var loans = await _sender.Send(new GetAllLoansQuery());
-
-        return Ok(loans);
-
+        return result.Match(
+            loans => Ok(loans),
+            errors => Problem(title: errors.First().Description));
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetLoanById(int id)
     {
+        var result = await _sender.Send(new GetLoanByIdQuery(id));
 
-        var loan = await _sender.Send(new GetLoanByIdQuery(id));
-
-        return Ok(loan);
+        return result.Match(
+            loan => Ok(loan),
+            errors => Problem(title: errors.First().Description));
     }
-
 
     [HttpPost]
     public async Task<IActionResult> AddLoan(AddLoanCommand command)
     {
-        var loan = _sender.Send(command);
+        var result = await _sender.Send(command);
 
-        return Ok(loan);
+        return result.Match(
+            loan => Ok(loan),
+            errors => Problem(title: errors.First().Description));
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteLoan(int id)
     {
+        var result = await _sender.Send(new DeleteLoanCommand(id));
 
-        await _sender.Send(new DeleteLoanCommand(id));
-
-        return NoContent();
+        return result.Match<IActionResult>(
+            _ => NoContent(),
+            errors => Problem(title: errors.First().Description));
     }
 }
