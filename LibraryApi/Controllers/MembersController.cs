@@ -12,17 +12,17 @@ namespace LibraryApi.Controllers;
 [Route("api/[controller]")]
 public class MembersController : ControllerBase
 {
-    private readonly ISender _sender;
+    private readonly IMediator _mediator;
 
-    public MembersController(ISender sender)
+    public MembersController(IMediator mediator)
     {
-        _sender = sender;
+        _mediator = mediator;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetMembers()
     {
-        var result = await _sender.Send(new GetAllMembersQuery());
+        var result = await _mediator.Send(new GetAllMembersQuery());
 
         return result.Match(
             members => Ok(members),
@@ -32,7 +32,7 @@ public class MembersController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetMemberById(int id)
     {
-        var result = await _sender.Send(new GetMemberByIdQuery(id));
+        var result = await _mediator.Send(new GetMemberByIdQuery(id));
 
         return result.Match(
             member => Ok(member),
@@ -42,7 +42,7 @@ public class MembersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddMember(AddMemberCommand command)
     {
-        var result = await _sender.Send(command);
+        var result = await _mediator.Send(command);
 
         return result.Match(
             member => Ok(member),
@@ -52,7 +52,7 @@ public class MembersController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteMember(int id)
     {
-        var result = await _sender.Send(new DeleteMemberCommand(id));
+        var result = await _mediator.Send(new DeleteMemberCommand(id));
 
         return result.Match<IActionResult>(
             _ => NoContent(),

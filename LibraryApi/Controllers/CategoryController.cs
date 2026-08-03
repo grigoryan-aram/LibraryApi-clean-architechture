@@ -12,17 +12,17 @@ namespace LibraryApi.Controllers;
 [Route("api/[controller]")]
 public class CategoriesController : ControllerBase
 {
-    private readonly ISender _sender;
+    private readonly IMediator _mediator;
 
-    public CategoriesController(ISender sender)
+    public CategoriesController(IMediator mediator)
     {
-        _sender = sender;
+        _mediator = mediator;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetCategories()
     {
-        var result = await _sender.Send(new GetAllCategorysQuery());
+        var result = await _mediator.Send(new GetAllCategorysQuery());
 
         return result.Match(
             categories => Ok(categories),
@@ -32,7 +32,7 @@ public class CategoriesController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetCategoryById(int id)
     {
-        var result = await _sender.Send(new GetCategoryByIdQuery(id));
+        var result = await _mediator.Send(new GetCategoryByIdQuery(id));
 
         return result.Match(
             category => Ok(category),
@@ -42,7 +42,7 @@ public class CategoriesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddCategory(AddCategoryCommand command)
     {
-        var result = await _sender.Send(command);
+        var result = await _mediator.Send(command);
 
         return result.Match(
             category => Ok(category),
@@ -52,7 +52,7 @@ public class CategoriesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCategory(int id)
     {
-        var result = await _sender.Send(new DeleteCategoryCommand(id));
+        var result = await _mediator.Send(new DeleteCategoryCommand(id));
 
         return result.Match<IActionResult>(
             _ => NoContent(),

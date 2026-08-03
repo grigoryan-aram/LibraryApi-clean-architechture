@@ -14,20 +14,20 @@ namespace LibraryApi.Controllers;
 public class BooksController : ControllerBase
 {
 
-    private readonly ISender _sender;
+    private readonly IMediator _mediator;
 
 
-    public BooksController(ISender sender)
+    public BooksController(IMediator mediator)
     {
 
-        _sender = sender;
+        _mediator = mediator;
     }
 
 
     [HttpGet]
     public async Task<IActionResult> GetBooks()
     {
-        var result = await _sender.Send(new GetAllBooksQuery());
+        var result = await _mediator.Send(new GetAllBooksQuery());
 
         return result.Match(books => Ok(books),
                errors => Problem(title: errors.First().Description));
@@ -37,7 +37,7 @@ public class BooksController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetBookById(int id)
     {
-        var result = await _sender.Send(new GetBookByIdQuery(id));
+        var result = await _mediator.Send(new GetBookByIdQuery(id));
 
         return result.Match(book => Ok(book),
                errors => Problem(title: errors.First().Description));
@@ -48,7 +48,7 @@ public class BooksController : ControllerBase
     public async Task<IActionResult> AddBook(AddBookCommand command)
     {
 
-        var result = await _sender.Send(command);
+        var result = await _mediator.Send(command);
 
         return result.Match(book => Ok(book),
                errors => Problem(title: errors.First().Description));
@@ -57,7 +57,7 @@ public class BooksController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteBook(int id)
     {
-        var result = await _sender.Send(new DeleteBookCommand(id));
+        var result = await _mediator.Send(new DeleteBookCommand(id));
 
         return result.Match<IActionResult>(
         _ => NoContent(),

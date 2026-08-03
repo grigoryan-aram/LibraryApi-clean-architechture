@@ -1,5 +1,6 @@
 ﻿using Application.Features.Registration;
 using LibraryApi.Application.DTOs;
+using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,21 +10,21 @@ namespace LibraryApi.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly MediatR.ISender _sender;
+        private readonly IMediator _mediator;
         private readonly SignInManager<IdentityUser> _signInManager;
 
         public AuthController(
-            MediatR.ISender sender,
+            IMediator mediator,
             SignInManager<IdentityUser> signInManager)
         {
-            _sender = sender;
+            _mediator = mediator;
             _signInManager = signInManager;
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDTO request)
         {
-            var result = await _sender.Send(new RegisterCommand(
+            var result = await _mediator.Send(new RegisterCommand(
                 request.Username,
                 request.Password,
                 request.Email));
