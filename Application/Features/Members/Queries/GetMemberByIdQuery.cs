@@ -1,10 +1,11 @@
-﻿using ErrorOr;
-using LibraryApi.Application.DTOs;
+﻿using Application.DTOs;
+using ErrorOr;
 using MediatR;
 
 namespace Application.Features.Members.Queries
 {
-    public record GetMemberByIdQuery(int Id) : IRequest<ErrorOr<MembersDTO>>;
+    public record GetMemberByIdQuery(int Id)
+        : IRequest<ErrorOr<MembersDTO>>;
 
 
 }

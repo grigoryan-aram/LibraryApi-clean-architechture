@@ -1,9 +1,10 @@
-﻿using Application.ServiceInterfaces;
+﻿using Application.RepositoryInterfaces;
+using Application.ServiceInterfaces;
 using FluentEmail.MailKitSmtp;
+using Infrastructure.Repositories;
 using Infrastructure.Services;
 using LibraryApi.Application.RepositoryInterfaces;
 using LibraryApi.Infrastructure.Data;
-using LibraryApi.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

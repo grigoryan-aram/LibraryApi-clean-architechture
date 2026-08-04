@@ -1,9 +1,9 @@
 ﻿using Application.Features.Members.Commands;
 using Application.Features.Members.Queries;
+using LibraryApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-
 
 namespace LibraryApi.Controllers;
 
@@ -26,7 +26,7 @@ public class MembersController : ControllerBase
 
         return result.Match(
             members => Ok(members),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 
     [HttpGet("{id}")]
@@ -36,7 +36,8 @@ public class MembersController : ControllerBase
 
         return result.Match(
             member => Ok(member),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors)
+        );
     }
 
     [HttpPost]
@@ -46,7 +47,7 @@ public class MembersController : ControllerBase
 
         return result.Match(
             member => Ok(member),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 
     [HttpDelete("{id}")]
@@ -54,8 +55,8 @@ public class MembersController : ControllerBase
     {
         var result = await _mediator.Send(new DeleteMemberCommand(id));
 
-        return result.Match<IActionResult>(
+        return result.Match(
             _ => NoContent(),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 }

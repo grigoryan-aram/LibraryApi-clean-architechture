@@ -1,11 +1,9 @@
-﻿namespace LibraryApi.Application.DTOs
+﻿namespace Application.DTOs
 {
-    public class LoansDTO
-    {
+    public record LoansDTO(
+        int BookId,
+        int MemberId,
+        DateTime BorrowedAt,
+        DateTime? ReturnedAt);
 
-        public int BookId { get; init; }
-        public int MemberId { get; init; }
-        public DateTime BorrowedAt { get; init; }
-        public DateTime? ReturnedAt { get; init; }
-    }
 }

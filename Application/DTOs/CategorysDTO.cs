@@ -1,8 +1,7 @@
-﻿namespace LibraryApi.Application.DTOs
+﻿namespace Application.DTOs
 {
-    public class CategorysDTO
-    {
-        public int id { get; init; }
-        public string Name { get; init; } = string.Empty;
-    }
+    public record CategorysDTO(
+         int id,
+         string Name);
+
 }

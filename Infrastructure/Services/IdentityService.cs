@@ -1,6 +1,7 @@
 ﻿
 using Application.DTOs;
 using Application.ServiceInterfaces;
+using ErrorOr;
 using Microsoft.AspNetCore.Identity;
 
 namespace Infrastructure.Services
@@ -8,10 +9,30 @@ namespace Infrastructure.Services
     public class IdentityService : IIdentityService
     {
         private readonly UserManager<IdentityUser> _userManager;
+        private readonly SignInManager<IdentityUser> _signInManager;
 
-        public IdentityService(UserManager<IdentityUser> userManager)
+        public IdentityService(UserManager<IdentityUser> userManager, SignInManager<IdentityUser> signInManager)
         {
             _userManager = userManager;
+            _signInManager = signInManager;
+        }
+
+        public async Task<ErrorOr<LoginResponseDTO>> LoginAsync(string username, string password, CancellationToken cancellationToken)
+        {
+            var result = await _signInManager.PasswordSignInAsync(
+                 username,
+                 password,
+                 isPersistent: false,
+                 lockoutOnFailure: false);
+
+            if (!result.Succeeded)
+            {
+                return Error.Unauthorized(
+                    code: "Auth.InvalidCredentials",
+                    description: "Invalid username or password.");
+            }
+
+            return new LoginResponseDTO("Login successful");
         }
 
         public async Task<RegisteredUserDTO> RegisterAsync(
@@ -33,11 +54,10 @@ namespace Infrastructure.Services
                 return null!;
             }
 
-            return new RegisteredUserDTO
-            {
-                Username = user.UserName,
-                Email = user.Email
-            };
+            return new RegisteredUserDTO(
+
+             user.UserName!,
+             user.Email!);
         }
     }
 

@@ -1,7 +1,7 @@
 ﻿using LibraryApi.Domain.Entities;
 
 
-namespace LibraryApi.Application.RepositoryInterfaces
+namespace Application.RepositoryInterfaces
 {
     public interface IBooksRepository
     {

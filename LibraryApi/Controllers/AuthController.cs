@@ -1,8 +1,11 @@
-﻿using Application.Features.Registration;
-using LibraryApi.Application.DTOs;
+﻿using Application.DTOs;
+using Application.Features.Registration;
+using ErrorOr;
+using LibraryApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+
 
 namespace LibraryApi.Controllers
 {
@@ -34,8 +37,9 @@ namespace LibraryApi.Controllers
                 {
                     Message = "User registered successfully"
                 }),
-                errors => Problem(title: errors.First().Description));
+                 errors => this.ToProblem(errors));
         }
+
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDTO dto)
@@ -46,19 +50,22 @@ namespace LibraryApi.Controllers
                 isPersistent: false,
                 lockoutOnFailure: false);
 
-            if (!result.Succeeded)
+            if (result.Succeeded)
             {
-                return Problem(
-                    title: "Invalid login",
-                    statusCode: StatusCodes.Status401Unauthorized);
+                return Ok(new
+                {
+                    Message = "Login successful"
+                });
             }
 
-            return Ok(new
-            {
-                Message = "Login successful"
-            });
+            var errors = new List<Error>
+    {
+        Error.Validation(
+            "Auth.InvalidCredentials",
+            "Invalid username or password.")
+    };
+
+            return this.ToProblem(errors);
         }
-
-
     }
 }

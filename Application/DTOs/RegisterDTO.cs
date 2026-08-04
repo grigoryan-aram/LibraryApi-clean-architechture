@@ -1,11 +1,9 @@
-﻿namespace LibraryApi.Application.DTOs
+﻿namespace Application.DTOs
 {
-    public class RegisterDTO
-    {
-        public string Username { get; init; } = string.Empty;
+    public record RegisterDTO(
+        string Username,
+        string Email,
+        string Password);
 
-        public string Email { get; init; } = string.Empty;
 
-        public string Password { get; init; } = string.Empty;
-    }
 }

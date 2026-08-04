@@ -1,5 +1,6 @@
 ﻿using Application.Features.Categorys.Commands;
 using Application.Features.Categorys.Query;
+using LibraryApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,7 +27,7 @@ public class CategoriesController : ControllerBase
 
         return result.Match(
             categories => Ok(categories),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 
     [HttpGet("{id}")]
@@ -36,7 +37,7 @@ public class CategoriesController : ControllerBase
 
         return result.Match(
             category => Ok(category),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 
     [HttpPost]
@@ -46,7 +47,7 @@ public class CategoriesController : ControllerBase
 
         return result.Match(
             category => Ok(category),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 
     [HttpDelete("{id}")]
@@ -54,8 +55,8 @@ public class CategoriesController : ControllerBase
     {
         var result = await _mediator.Send(new DeleteCategoryCommand(id));
 
-        return result.Match<IActionResult>(
+        return result.Match(
             _ => NoContent(),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 }

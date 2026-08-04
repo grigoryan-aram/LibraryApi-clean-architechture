@@ -1,13 +1,11 @@
-﻿namespace LibraryApi.Application.DTOs
+﻿namespace Application.DTOs
 {
 
-    public class BooksDTO
-    {
-        public string Title { get; init; } = string.Empty;
-        public string Author { get; init; } = string.Empty;
-        public bool IsBorrowed { get; init; }
-        public int CategoryId { get; init; }
-    }
+    public record BooksDTO(
+        string Title,
+        string Author,
+        bool IsBorrowed,
+        int CategoryId);
 }
 
 

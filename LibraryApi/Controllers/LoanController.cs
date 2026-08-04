@@ -1,5 +1,6 @@
 ﻿using Application.Features.Loans.Commands;
 using Application.Features.Loans.Queries;
+using LibraryApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,7 +28,7 @@ public class LoansController : ControllerBase
 
         return result.Match(
             loans => Ok(loans),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 
     [HttpGet("{id}")]
@@ -37,7 +38,7 @@ public class LoansController : ControllerBase
 
         return result.Match(
             loan => Ok(loan),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 
     [HttpPost]
@@ -47,7 +48,7 @@ public class LoansController : ControllerBase
 
         return result.Match(
             loan => Ok(loan),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 
     [HttpDelete("{id}")]
@@ -55,8 +56,8 @@ public class LoansController : ControllerBase
     {
         var result = await _mediator.Send(new DeleteLoanCommand(id));
 
-        return result.Match<IActionResult>(
+        return result.Match(
             _ => NoContent(),
-            errors => Problem(title: errors.First().Description));
+            errors => this.ToProblem(errors));
     }
 }

@@ -1,6 +1,6 @@
-﻿using ErrorOr;
-using LibraryApi.Application.DTOs;
-using LibraryApi.Application.RepositoryInterfaces;
+﻿using Application.DTOs;
+using Application.RepositoryInterfaces;
+using ErrorOr;
 using Mapster;
 using MediatR;
 namespace Application.Features.Loans.Queries
