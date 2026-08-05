@@ -5,6 +5,7 @@ using Infrastructure.Repositories;
 using Infrastructure.Services;
 using LibraryApi.Application.RepositoryInterfaces;
 using LibraryApi.Infrastructure.Data;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +21,9 @@ namespace Infrastructure.DependencyInjection
             services.AddDbContext<LibraryDBContext>(options =>
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
+            services.AddIdentity<IdentityUser, IdentityRole>()
+            .AddEntityFrameworkStores<LibraryDBContext>()
+            .AddDefaultTokenProviders();
 
             services.AddScoped<IBooksRepository, BooksRepository>();
             services.AddScoped<ICategorysRepository, CategorysRepository>();
