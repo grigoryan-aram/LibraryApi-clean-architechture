@@ -3,6 +3,7 @@ using Application.ServiceInterfaces;
 using FluentEmail.MailKitSmtp;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
+using Infrastructure.Settings;
 using LibraryApi.Application.RepositoryInterfaces;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
@@ -31,6 +32,9 @@ namespace Infrastructure.DependencyInjection
             services.AddScoped<ILoansRepository, LoansRepository>();
             services.AddScoped<IIdentityService, IdentityService>();
 
+
+            services.Configure<EmailSettings>(
+            configuration.GetSection("Email"));
 
             var emailSection = configuration.GetSection("Email");
 
