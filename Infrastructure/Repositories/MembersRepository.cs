@@ -26,19 +26,12 @@ namespace Infrastructure.Repositories
         }
 
         public async Task DeleteMemberAsync(
-            int id,
-            CancellationToken cancellationToken)
+          int id,
+          CancellationToken cancellationToken)
         {
-            var member = await _context.Members.FindAsync(
-                new object[] { id },
-                cancellationToken);
-
-            if (member == null)
-                return;
-
-            _context.Members.Remove(member);
-
-            await _context.SaveChangesAsync(cancellationToken);
+            await _context.Members
+                .Where(m => m.Id == id)
+                .ExecuteDeleteAsync(cancellationToken);
         }
 
         public async Task<MemberModel?> GetMemberByIdAsync(

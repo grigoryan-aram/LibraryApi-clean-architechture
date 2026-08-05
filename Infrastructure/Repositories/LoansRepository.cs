@@ -27,16 +27,13 @@ namespace Infrastructure.Repositories
             return loan;
         }
 
-        public async Task DeleteLoanAsync(int Id, CancellationToken cancellationtoken)
+        public async Task DeleteLoanAsync(
+        int id,
+        CancellationToken cancellationToken)
         {
-            var loan = await _context.Loans.FindAsync(
-               new object[] { Id },
-               cancellationtoken
-               );
-
-            _context.Loans.Remove(loan!);
-
-            await _context.SaveChangesAsync(cancellationtoken);
+            await _context.Loans
+                .Where(l => l.Id == id)
+                .ExecuteDeleteAsync(cancellationToken);
         }
 
         public async Task<IReadOnlyList<LoanModel>> GetAllLoansAsync(CancellationToken cancellationToken)

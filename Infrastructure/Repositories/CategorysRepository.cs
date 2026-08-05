@@ -30,20 +30,13 @@ namespace Infrastructure.Repositories
 
 
         public async Task DeleteCategoryAsync(
-            int id,
-            CancellationToken cancellationToken)
+           int id,
+           CancellationToken cancellationToken)
         {
-            var category = await _context.Categories
-                .FindAsync(new object[] { id }, cancellationToken);
-
-            if (category == null)
-                return;
-
-            _context.Categories.Remove(category);
-
-            await _context.SaveChangesAsync(cancellationToken);
+            await _context.Categories
+                .Where(c => c.Id == id)
+                .ExecuteDeleteAsync(cancellationToken);
         }
-
 
         public async Task<IReadOnlyList<CategoryModel>> GetAllCategoriesAsync(
             CancellationToken cancellationToken)
