@@ -31,16 +31,10 @@ namespace Infrastructure.Repositories
             int id,
             CancellationToken cancellationToken)
         {
-            var book = await _context.Books.FindAsync(
-                new object[] { id },
-                cancellationToken);
-
-
-            _context.Books.Remove(book!);
-
-            await _context.SaveChangesAsync(cancellationToken);
+            await _context.Books
+                .Where(b => b.Id == id)
+                .ExecuteDeleteAsync(cancellationToken);
         }
-
 
         public async Task<IReadOnlyList<BookModel>> GetAllAsync(
             CancellationToken cancellationToken)
