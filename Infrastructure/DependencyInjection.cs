@@ -33,7 +33,7 @@ namespace Infrastructure.DependencyInjection
             services.AddScoped<ILoansRepository, LoansRepository>();
             services.AddScoped<IIdentityService, IdentityService>();
             services.AddScoped<IEmailService, EmailService>();
-            services.AddScoped<IBackgroundJobService, BackgroundJobService>();
+
 
 
             services.AddHangfire(config =>
