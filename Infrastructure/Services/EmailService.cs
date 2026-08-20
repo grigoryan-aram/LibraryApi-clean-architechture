@@ -1,9 +1,10 @@
-﻿using FluentEmail.Core;
+﻿using Application.ServiceInterfaces;
+using FluentEmail.Core;
 
 
 namespace Infrastructure.Services
 {
-    public class EmailService
+    public class EmailService : IEmailService
     {
         private readonly IFluentEmail _email;
 
@@ -12,17 +13,15 @@ namespace Infrastructure.Services
             _email = email;
         }
 
-        public async Task SendEmailAsync(
-            string to,
-            string subject,
-            string body,
-            CancellationToken cancellationToken)
+        public async Task SendWelcomeEmailAsync(
+            string email,
+            string username)
         {
             await _email
-                .To(to)
-                .Subject(subject)
-                .Body(body)
-                .SendAsync(cancellationToken);
+                .To(email)
+                .Subject("Welcome")
+                .Body($"Welcome, {username}!")
+                .SendAsync();
         }
     }
 }

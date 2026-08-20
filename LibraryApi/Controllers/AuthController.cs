@@ -22,6 +22,7 @@ namespace LibraryApi.Controllers
         {
             _mediator = mediator;
             _signInManager = signInManager;
+
         }
 
         [HttpPost("register")]

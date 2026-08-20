@@ -1,4 +1,5 @@
 using Application.DependencyInjection;
+using Hangfire;
 using Infrastructure.DependencyInjection;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.AspNetCore.RateLimiting;
@@ -26,6 +27,9 @@ builder.Services.AddRateLimiter(options =>
 
 
 
+
+
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -33,6 +37,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 
 var app = builder.Build();
+
+
+app.UseHangfireDashboard();
 
 app.UseRateLimiter();
 
@@ -44,16 +51,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 
-
-
-
-
-
 app.UseSwagger();
 app.UseSwaggerUI();
-
-
-
 
 
 

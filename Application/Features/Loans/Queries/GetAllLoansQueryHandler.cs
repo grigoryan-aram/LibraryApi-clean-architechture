@@ -3,6 +3,7 @@ using Application.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
 using MediatR;
+
 namespace Application.Features.Loans.Queries
 {
     public class GetAllLoansQueryHandler : IRequestHandler<GetAllLoansQuery, ErrorOr<IReadOnlyList<LoansDTO>>>

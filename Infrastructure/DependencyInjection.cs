@@ -1,6 +1,7 @@
 ﻿using Application.RepositoryInterfaces;
 using Application.ServiceInterfaces;
 using FluentEmail.MailKitSmtp;
+using Hangfire;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Infrastructure.Settings;
@@ -31,6 +32,17 @@ namespace Infrastructure.DependencyInjection
             services.AddScoped<IMembersRepository, MembersRepository>();
             services.AddScoped<ILoansRepository, LoansRepository>();
             services.AddScoped<IIdentityService, IdentityService>();
+            services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<IBackgroundJobService, BackgroundJobService>();
+
+
+            services.AddHangfire(config =>
+    config.UseSqlServerStorage(
+        configuration.GetConnectionString("DefaultConnection")));
+            services.AddHangfireServer();
+
+
+
 
 
             services.Configure<EmailSettings>(
@@ -49,9 +61,6 @@ namespace Infrastructure.DependencyInjection
                     User = emailSection["User"],
                     Password = emailSection["Password"]
                 });
-
-
-
 
             return services;
         }

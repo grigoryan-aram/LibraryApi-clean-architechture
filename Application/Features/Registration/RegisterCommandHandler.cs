@@ -1,49 +1,47 @@
 ﻿using Application.DTOs;
+using Application.Features.Registration;
 using Application.ServiceInterfaces;
 using ErrorOr;
+using Hangfire;
 using MediatR;
 
-namespace Application.Features.Registration
+public class RegisterCommandHandler
+    : IRequestHandler<RegisterCommand, ErrorOr<RegisteredUserDTO>>
 {
-    public class RegisterCommandHandler : IRequestHandler<RegisterCommand, ErrorOr<RegisteredUserDTO>>
+    private readonly IIdentityService _identityService;
+    private readonly IBackgroundJobClient _backgroundJobClient;
+
+    public RegisterCommandHandler(
+        IIdentityService identityService,
+         IBackgroundJobClient backgroundJobClient)
     {
-        private readonly IIdentityService _identityService;
-        private readonly IPublisher _publisher;
+        _identityService = identityService;
+        _backgroundJobClient = backgroundJobClient;
+    }
 
-        public RegisterCommandHandler(
-            IIdentityService identityService,
-            IPublisher publisher)
+    public async Task<ErrorOr<RegisteredUserDTO>> Handle(
+        RegisterCommand request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _identityService.RegisterAsync(
+            request.Username,
+            request.Email,
+            request.Password,
+            cancellationToken);
+
+        if (user == null)
         {
-            _identityService = identityService;
-            _publisher = publisher;
+            return Error.Failure(
+                "failed to create user",
+                "a failure has occurred");
         }
+        _backgroundJobClient.Enqueue(() =>
 
-        public async Task<ErrorOr<RegisteredUserDTO>> Handle(RegisterCommand request,
-            CancellationToken cancellationToken)
-        {
-
-
-
-            var user = await _identityService.RegisterAsync
-                (request.Username
-                , request.Email
-                , request.Password
-                , cancellationToken);
+        Console.WriteLine($"User {user.Username} " +
+        $"has been registered successfully."));
 
 
-            if (user == null)
-            {
-                return Error.Failure("failed to create user", "a failure has occurred");
-            }
 
-
-            await _publisher.Publish(
-                new UserRegisteredNotification(
-                    user.Email,
-                    user.Username),
-                cancellationToken);
-
-            return user;
-        }
+        return user;
     }
 }
