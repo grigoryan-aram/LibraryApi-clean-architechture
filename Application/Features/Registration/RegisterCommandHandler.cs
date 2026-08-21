@@ -1,5 +1,6 @@
 ﻿using Application.DTOs;
 using Application.Features.Registration;
+using Application.Jobs;
 using Application.ServiceInterfaces;
 using ErrorOr;
 using Hangfire;
@@ -35,12 +36,8 @@ public class RegisterCommandHandler
                 "failed to create user",
                 "a failure has occurred");
         }
-        _backgroundJobClient.Enqueue(() =>
-
-        Console.WriteLine($"User {user.Username} " +
-        $"has been registered successfully."));
-
-
+        _backgroundJobClient.Enqueue<SendWelcomeEmailJob>(
+            job => job.ExecuteAsync(user.Email, user.Username));
 
         return user;
     }

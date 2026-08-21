@@ -101,14 +101,16 @@ Hangfire (`Infrastructure/DependencyInjection.cs`) uses SQL Server storage on th
 
 Email is FluentEmail + MailKit, configured from the `Email` config section (also bound to `Infrastructure/Settings/EmailSettings`).
 
-The registration → welcome-email path is mid-refactor and **not wired end to end**:
+The registration → welcome-email path **is wired** and runs through Hangfire:
 
-- `RegisterCommandHandler` injects `IBackgroundJobClient` and enqueues a placeholder `Console.WriteLine`, not a real job.
-- `Application/Jobs/SendWelcomeEmailJob.cs` (wrapping `IEmailService`) is never enqueued.
-- `UserRegisteredNotification` has a handler (`Application/Features/Notifications/SendEmailHandler.cs`) but nothing ever publishes it.
-- The working tree deletes the older `IBackgroundJobService`/`BackgroundJobService` and its DI registration in favour of Hangfire's `IBackgroundJobClient`.
+`AuthController.Register` → `RegisterCommandHandler` → `_backgroundJobClient.Enqueue<SendWelcomeEmailJob>(job => job.ExecuteAsync(user.Email, user.Username))` → `SendWelcomeEmailJob` → `IEmailService` → `EmailService` (FluentEmail + MailKit).
 
-That is three half-built mechanisms for the same welcome email. Consolidate rather than adding a fourth.
+Two things to know before touching it:
+
+- `SendWelcomeEmailJob` **must stay registered** in `Application/DependencyInjection.cs`. Hangfire.AspNetCore's activator resolves job classes with `GetRequiredService`, so an unregistered job type throws at execution time — visible only as a failed job in `/hangfire`, never at the API call.
+- `EmailService` checks `response.Successful` and throws on failure **on purpose**. FluentEmail swallows SMTP exceptions and reports them on the response, so without that check a failed send is recorded as a *succeeded* Hangfire job and never retried. Do not "simplify" it back to a bare `await ... .SendAsync()`.
+
+Still-dead leftovers from the same refactor, safe to delete: `UserRegisteredNotification` plus its handler `Application/Features/Notifications/SendEmailHandler.cs` (nothing publishes the notification). The working tree also deletes the older `IBackgroundJobService`/`BackgroundJobService` and its DI registration in favour of Hangfire's `IBackgroundJobClient`.
 
 ## Rate limiting
 

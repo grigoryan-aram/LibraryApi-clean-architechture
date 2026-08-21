@@ -17,11 +17,21 @@ namespace Infrastructure.Services
             string email,
             string username)
         {
-            await _email
+            var response = await _email
                 .To(email)
                 .Subject("Welcome")
                 .Body($"Welcome, {username}!")
                 .SendAsync();
+
+            // FluentEmail swallows SMTP exceptions and reports them on the
+            // response instead of throwing. Without this check a failed send
+            // looks like a successful Hangfire job and is never retried.
+            if (!response.Successful)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to send welcome email to {email}: " +
+                    string.Join("; ", response.ErrorMessages));
+            }
         }
     }
 }
