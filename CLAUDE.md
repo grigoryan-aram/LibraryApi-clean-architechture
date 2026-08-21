@@ -53,7 +53,17 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-There is no test project. `dotnet build` is the only automated check.
+There is no test project yet, so `dotnet build` is currently the only automated check. See **Keeping tests current** below before changing code.
+
+## Keeping tests current
+
+Every code change here includes bringing the unit tests with it — add tests for new behavior, update the ones the change invalidated, drop the ones whose code is gone, then run `dotnet test` and report the real result. This is part of the change, not a follow-up.
+
+Load the **`renew-tests`** skill for the how: what's worth testing per layer, and the .NET traps (notably that `ExecuteDeleteAsync`, which every repository here uses for deletes, throws on the EF Core InMemory provider — repository tests need the SQLite in-memory provider instead).
+
+There is no test project yet. The first change that needs one should bootstrap `tests/Application.UnitTests` (xUnit + Moq, xUnit's built-in `Assert`) — the skill has the exact commands. Say so before creating it rather than surprising the reviewer with a new project in the diff.
+
+Highest-value targets in this codebase, given its shape: MediatR handlers (mock the repository interface, assert the `ErrorOr` error *type and code*, not merely that it errored), the FluentValidation validators, and the convention-based Mapster mappings — those break silently on a property rename, which is the single most likely way to break this app without a compiler error.
 
 ## Request pipeline
 
