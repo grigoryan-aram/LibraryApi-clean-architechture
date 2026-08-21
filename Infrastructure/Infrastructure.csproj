@@ -10,6 +10,12 @@
 	
 		<PackageReference Include="FluentEmail.Core" Version="3.0.2" />
 		<PackageReference Include="FluentEmail.MailKit" Version="3.0.2" />
+		<!-- NOTE: this drags in MailKit/MimeKit 2.10.1, both of which have open
+		     advisories (fixed only in MailKit 4.16.0 / MimeKit 4.15.1). Those
+		     versions are NOT binary-compatible with FluentEmail.MailKit 3.0.2
+		     (MailTransport.SendAsync changed signature), and 3.0.2 is the last
+		     release, so a version override cannot fix this. Replacing the sender
+		     is the only route. -->
 		<PackageReference Include="Hangfire" Version="1.8.24" />
 		
 
@@ -18,7 +24,6 @@
 		
 
 		
-		<PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.11" />
 		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
@@ -26,6 +31,13 @@
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- SignInManager and AddIdentity live in the ASP.NET Core shared framework.
+		     This replaces the legacy Microsoft.AspNetCore.Identity 2.3.11 package,
+		     whose 2.x dependency chain dragged in System.Security.Cryptography.Xml 8.0.2. -->
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
 
 	<ItemGroup>
