@@ -29,6 +29,11 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 
+  <!-- NOTE: appsettings.Secrets.json needs no entry here. The Web SDK picks up
+       appsettings*.json as Content automatically and publishes it, so the
+       gitignored secrets file rides along with every deploy. Adding an explicit
+       <Content Include> for it is a duplicate-item build error (NETSDK1022). -->
+
   <ItemGroup>
     <ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
   </ItemGroup>

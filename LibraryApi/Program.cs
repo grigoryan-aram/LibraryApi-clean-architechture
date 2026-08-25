@@ -11,15 +11,23 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // The host (MonsterASP shared IIS) has no place to set environment variables,
-// so production credentials live in a file that exists ONLY on the server:
-// create appsettings.Secrets.json through the panel's file manager. Publishing
-// never overwrites it (it is not part of the project) and never deletes it
-// (SkipExtraFilesOnServer is true in the publish profile). It is gitignored.
-// Environment variables are re-added afterwards so they still win where a host
-// does support them.
-builder.Configuration
-    .AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: true)
-    .AddEnvironmentVariables();
+// so production credentials live in appsettings.Secrets.json. That file is
+// gitignored and copied to the server by publishing (see the Content item in
+// Presentation.csproj), so it is never committed and never hand-uploaded.
+//
+// Production ONLY, deliberately: the file holds the production connection
+// string, and loading it locally would silently point `dotnet run` — and the
+// Database.Migrate() call at the bottom of this file — at the live database.
+// Local development gets these values from user secrets instead.
+//
+// Environment variables are re-added afterwards so they still win on a host
+// that does support them.
+if (builder.Environment.IsProduction())
+{
+    builder.Configuration
+        .AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: true)
+        .AddEnvironmentVariables();
+}
 
 builder.Services.AddControllers();
 
