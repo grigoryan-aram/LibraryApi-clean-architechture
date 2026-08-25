@@ -191,9 +191,11 @@ Being in-memory, the allowance resets on restart and is per-instance. Fine for o
 
 ## Transport security
 
-`UseHttpsRedirection()` runs first in the pipeline and `UseHsts()` is added outside Development. The Identity cookie is `HttpOnly`, `SameSite=Lax`, and `SecurePolicy` is `Always` outside Development (`SameAsRequest` locally, so plain-http local runs still work).
+One switch controls all of it: **`Security:RequireHttps`** (read in `Program.cs`, defaults to `true`). When true, `UseHttpsRedirection()` runs first in the pipeline, `UseHsts()` is added outside Development, and the Identity cookie's `SecurePolicy` is `Always` outside Development. When false, none of those apply and the cookie is `SameAsRequest`. The cookie is `HttpOnly` and `SameSite=Lax` either way.
 
-Two consequences: **the deployed site has to actually serve HTTPS** — with `Always`, a cookie issued over http is never sent back, so login silently fails — and `UseHsts()` emits nothing on `localhost` by design, so that header can only be confirmed on the real domain.
+**It is `false` in `appsettings.Production.json`, deliberately.** MonsterASP's free plan does not offer a TLS certificate — Let's Encrypt is Premium-only there, and `runasp.net` is not on the Public Suffix List, so a self-obtained Let's Encrypt certificate would contend for the rate limit of a domain shared with every other free customer. The site is therefore served over plain HTTP, which means **passwords, the session cookie and the Blazor WebSocket are not encrypted in transit**. The app logs a warning on every start while this is the case. Set it back to `true` the day a certificate exists; that restores the redirect, HSTS and the `Secure` flag together.
+
+Do not "fix" this by setting `Secure` while the host is HTTP-only: the browser accepts such a cookie and never sends it back, so sign-in fails with nothing in the logs to explain it. `UseHsts()` also emits nothing on `localhost` by design, so that header can only ever be confirmed on the real domain.
 
 ## Deployment
 

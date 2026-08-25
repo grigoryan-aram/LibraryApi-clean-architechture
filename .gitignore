@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Server-only secrets file: created by hand on the host, never committed.
+appsettings.Secrets.json
