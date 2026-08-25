@@ -1,0 +1,20 @@
+﻿<Router AppAssembly="@typeof(Routes).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+            <NotAuthorized>
+                <div class="gate">
+                    <div class="gate-card">
+                        <span class="gate-glyph">🔒</span>
+                        <h1>Members only</h1>
+                        <p>
+                            This page sits behind the same Identity cookie the API uses.
+                            Sign in and you will be sent straight back here.
+                        </p>
+                        <a class="btn btn-primary" href="account">Go to sign in</a>
+                    </div>
+                </div>
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+</Router>

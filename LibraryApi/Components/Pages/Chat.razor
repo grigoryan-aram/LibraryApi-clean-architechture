@@ -1,0 +1,224 @@
+﻿@page "/chat"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject IMediator Mediator
+@inject IJSRuntime JS
+
+<PageTitle>Chat — Athenaeum</PageTitle>
+
+<section class="chat">
+
+    <header class="chat-head">
+        <div>
+            <h1>Ask Claude</h1>
+            <p class="muted">
+                Every message goes
+                <code>Chat.razor → IMediator → AskClaudeQueryHandler → IClaudeService</code>.
+            </p>
+        </div>
+
+        <div class="chat-meta">
+            @if (_conversationId is not null)
+            {
+                <span class="chip" title="conversation id">
+                    <span class="chip-key">chat</span>
+                    <span class="chip-val">@_conversationId.Value.ToString()[..8]</span>
+                </span>
+                <span class="chip" title="tokens in / out this conversation">
+                    <span class="chip-key">tokens</span>
+                    <span class="chip-val">@_tokensIn ↓ @_tokensOut ↑</span>
+                </span>
+            }
+            else
+            {
+                <span class="chip chip-idle"><span class="chip-val">new conversation</span></span>
+            }
+
+            <button class="btn btn-ghost btn-sm" @onclick="StartOver" disabled="@(_turns.Count == 0 || _sending)">
+                Start over
+            </button>
+        </div>
+    </header>
+
+    <div class="chat-log" id="chat-log">
+
+        @if (_turns.Count == 0)
+        {
+            <div class="empty">
+                <span class="empty-glyph">✦</span>
+                <p>Nothing here yet. Try one of these:</p>
+                <div class="suggestions">
+                    @foreach (var prompt in Suggestions)
+                    {
+                        <button class="suggestion" @onclick="() => UseSuggestion(prompt)" disabled="@_sending">
+                            @prompt
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
+        @foreach (var turn in _turns)
+        {
+            <article class="turn turn-@turn.Role">
+                <div class="avatar">@(turn.Role == ChatRoles.User ? "you" : "AI")</div>
+                <div class="bubble">
+                    @foreach (var paragraph in turn.Paragraphs)
+                    {
+                        <p>@paragraph</p>
+                    }
+                </div>
+            </article>
+        }
+
+        @if (_sending)
+        {
+            <article class="turn turn-assistant">
+                <div class="avatar">AI</div>
+                <div class="bubble bubble-thinking">
+                    <span class="dot-typing"></span>
+                    <span class="dot-typing"></span>
+                    <span class="dot-typing"></span>
+                </div>
+            </article>
+        }
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-error" role="alert">
+                <strong>@_error</strong>
+                <span class="muted">The turn was not saved — send it again once that is sorted.</span>
+            </div>
+        }
+
+    </div>
+
+    <form class="composer" @onsubmit="SendAsync" @onsubmit:preventDefault>
+        <textarea class="composer-input"
+                  placeholder="Ask about books, loans, members — or how this API works…"
+                  rows="2"
+                  maxlength="4000"
+                  disabled="@_sending"
+                  @bind="_draft"
+                  @bind:event="oninput"
+                  @onkeydown="OnKeyDownAsync"></textarea>
+
+        <div class="composer-side">
+            <span class="counter @(_draft.Length > 3800 ? "counter-warn" : null)">@_draft.Length / 4000</span>
+            <button class="btn btn-primary" type="submit" disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))">
+                @(_sending ? "Thinking…" : "Send")
+            </button>
+        </div>
+    </form>
+
+    <p class="composer-hint muted">Enter sends · Shift + Enter for a new line</p>
+
+</section>
+
+@code {
+    private static readonly string[] Suggestions =
+    [
+        "What can this API do?",
+        "How do I borrow a book?",
+        "Explain what a loan record holds."
+    ];
+
+    private readonly List<Turn> _turns = [];
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    // The circuit has no HttpContext, so the allowance key comes from the
+    // cascading authentication state instead.
+    private string _requester = string.Empty;
+
+    private string _draft = string.Empty;
+    private Guid? _conversationId;
+    private bool _sending;
+    private string? _error;
+    private long _tokensIn;
+    private long _tokensOut;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is not null)
+        {
+            var state = await AuthenticationState;
+            _requester = state.User.Identity?.Name ?? string.Empty;
+        }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey)
+        {
+            await SendAsync();
+        }
+    }
+
+    private void UseSuggestion(string prompt)
+    {
+        _draft = prompt;
+    }
+
+    private void StartOver()
+    {
+        _turns.Clear();
+        _conversationId = null;
+        _tokensIn = 0;
+        _tokensOut = 0;
+        _error = null;
+    }
+
+    private async Task SendAsync()
+    {
+        var message = _draft.Trim();
+
+        if (_sending || message.Length == 0)
+        {
+            return;
+        }
+
+        _error = null;
+        _draft = string.Empty;
+        _turns.Add(new Turn(ChatRoles.User, message));
+        _sending = true;
+
+        try
+        {
+            var result = await Mediator.Send(
+                new AskClaudeQuery(message, _conversationId, _requester));
+
+            if (result.IsError)
+            {
+                // Mirror the API: a failed turn is not part of the conversation,
+                // so drop the optimistic bubble back into the composer.
+                _error = result.FirstError.Description;
+                _turns.RemoveAt(_turns.Count - 1);
+                _draft = message;
+                return;
+            }
+
+            _conversationId = result.Value.ConversationId;
+            _tokensIn += result.Value.InputTokens;
+            _tokensOut += result.Value.OutputTokens;
+            _turns.Add(new Turn(ChatRoles.Assistant, result.Value.Reply));
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await JS.InvokeVoidAsync("athenaeum.scrollToEnd", "chat-log");
+    }
+
+    private sealed record Turn(string Role, string Content)
+    {
+        public IEnumerable<string> Paragraphs =>
+            Content.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+}

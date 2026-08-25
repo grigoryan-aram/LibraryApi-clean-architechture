@@ -1,0 +1,205 @@
+﻿@page "/account"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
+@inject IMediator Mediator
+@inject NavigationManager Nav
+
+@* Deliberately NOT interactive. Signing in writes an auth cookie, and a
+   Blazor circuit has no response left to write headers on — so these forms
+   are plain static-SSR posts, the same shape the Identity templates use. *@
+
+<PageTitle>Account — Athenaeum</PageTitle>
+
+<section class="account">
+
+    <header class="account-head">
+        <h1>Account</h1>
+        <p class="muted">
+            The cookie minted here is the same one <code>/api/Auth/login</code>
+            issues — it authorises the API, Swagger and the chat circuit alike.
+        </p>
+    </header>
+
+    <AuthorizeView Context="auth">
+        <Authorized>
+            <div class="panel panel-single">
+                <span class="panel-glyph">✓</span>
+                <h2>Signed in as @auth.User.Identity?.Name</h2>
+                <p class="muted">The chat page and every <code>[Authorize]</code> endpoint are open to you.</p>
+
+                <div class="panel-actions">
+                    <a class="btn btn-primary" href="chat">Go to the chat</a>
+
+                    <form method="post" @formname="logout" @onsubmit="SignOutAsync">
+                        <AntiforgeryToken />
+                        <button class="btn btn-ghost" type="submit">Sign out</button>
+                    </form>
+                </div>
+            </div>
+        </Authorized>
+
+        <NotAuthorized>
+            <div class="panels">
+
+                <div class="panel">
+                    <span class="panel-glyph">→</span>
+                    <h2>Sign in</h2>
+
+                    @if (_loginError is not null)
+                    {
+                        <div class="alert alert-error" role="alert">@_loginError</div>
+                    }
+
+                    <EditForm Model="LoginModel" FormName="login" OnValidSubmit="SignInAsync" method="post">
+                        <DataAnnotationsValidator />
+
+                        <label class="field">
+                            <span>Username</span>
+                            <InputText @bind-Value="LoginModel.Username" autocomplete="username" />
+                            <ValidationMessage For="() => LoginModel.Username" />
+                        </label>
+
+                        <label class="field">
+                            <span>Password</span>
+                            <InputText type="password" @bind-Value="LoginModel.Password" autocomplete="current-password" />
+                            <ValidationMessage For="() => LoginModel.Password" />
+                        </label>
+
+                        <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+                    </EditForm>
+                </div>
+
+                <div class="panel">
+                    <span class="panel-glyph">✦</span>
+                    <h2>Create an account</h2>
+
+                    @if (_registerErrors.Count > 0)
+                    {
+                        <div class="alert alert-error" role="alert">
+                            @foreach (var error in _registerErrors)
+                            {
+                                <div>@error</div>
+                            }
+                        </div>
+                    }
+
+                    @if (_registerSuccess is not null)
+                    {
+                        <div class="alert alert-ok" role="status">@_registerSuccess</div>
+                    }
+
+                    <EditForm Model="RegisterModel" FormName="register" OnValidSubmit="RegisterAsync" method="post">
+                        <DataAnnotationsValidator />
+
+                        <label class="field">
+                            <span>Username</span>
+                            <InputText @bind-Value="RegisterModel.Username" autocomplete="username" />
+                            <ValidationMessage For="() => RegisterModel.Username" />
+                        </label>
+
+                        <label class="field">
+                            <span>Email</span>
+                            <InputText @bind-Value="RegisterModel.Email" autocomplete="email" />
+                            <ValidationMessage For="() => RegisterModel.Email" />
+                        </label>
+
+                        <label class="field">
+                            <span>Password</span>
+                            <InputText type="password" @bind-Value="RegisterModel.Password" autocomplete="new-password" />
+                            <ValidationMessage For="() => RegisterModel.Password" />
+                        </label>
+
+                        <button class="btn btn-ghost btn-block" type="submit">Register</button>
+                    </EditForm>
+
+                    <p class="fineprint muted">
+                        Registration runs through <code>RegisterCommand</code> and queues the
+                        welcome email as a Hangfire job — exactly as the API does.
+                    </p>
+                </div>
+
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+
+</section>
+
+@code {
+    [SupplyParameterFromForm(FormName = "login")]
+    private LoginInput LoginModel { get; set; } = new();
+
+    [SupplyParameterFromForm(FormName = "register")]
+    private RegisterInput RegisterModel { get; set; } = new();
+
+    private string? _loginError;
+    private string? _registerSuccess;
+    private List<string> _registerErrors = [];
+
+    private async Task SignInAsync()
+    {
+        var result = await SignInManager.PasswordSignInAsync(
+            LoginModel.Username,
+            LoginModel.Password,
+            isPersistent: false,
+            lockoutOnFailure: false);
+
+        if (!result.Succeeded)
+        {
+            _loginError = "Invalid username or password.";
+            return;
+        }
+
+        Nav.NavigateTo("chat");
+    }
+
+    private async Task RegisterAsync()
+    {
+        _registerErrors = [];
+        _registerSuccess = null;
+
+        var result = await Mediator.Send(new RegisterCommand(
+            RegisterModel.Username,
+            RegisterModel.Password,
+            RegisterModel.Email));
+
+        if (result.IsError)
+        {
+            _registerErrors = result.Errors.Select(error => error.Description).ToList();
+            return;
+        }
+
+        _registerSuccess = $"Welcome, {result.Value.Username}. You can sign in now.";
+        RegisterModel = new RegisterInput();
+    }
+
+    private async Task SignOutAsync()
+    {
+        await SignInManager.SignOutAsync();
+        Nav.NavigateTo("", forceLoad: true);
+    }
+
+    private sealed class LoginInput
+    {
+        [Required(ErrorMessage = "Username is required.")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required.")]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private sealed class RegisterInput
+    {
+        [Required(ErrorMessage = "Username is required.")]
+        [MinLength(3, ErrorMessage = "Username must be at least 3 characters long.")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "That does not look like an email address.")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required.")]
+        public string Password { get; set; } = string.Empty;
+    }
+}

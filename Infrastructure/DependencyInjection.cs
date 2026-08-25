@@ -20,8 +20,21 @@ namespace Infrastructure.DependencyInjection
 
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
         {
+            // No connection string is committed any more. Fail here, loudly and
+            // early, rather than somewhere deep inside EF at first query.
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "No connection string configured. Set it as the user secret " +
+                    "\"ConnectionStrings:DefaultConnection\" for local work, or as " +
+                    "the environment variable ConnectionStrings__DefaultConnection " +
+                    "on the host.");
+            }
+
             services.AddDbContext<LibraryDBContext>(options =>
-                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+                options.UseSqlServer(connectionString));
 
             services.AddIdentity<IdentityUser, IdentityRole>()
             .AddEntityFrameworkStores<LibraryDBContext>()
@@ -33,6 +46,29 @@ namespace Infrastructure.DependencyInjection
             services.AddScoped<ILoansRepository, LoansRepository>();
             services.AddScoped<IIdentityService, IdentityService>();
             services.AddScoped<IEmailService, EmailService>();
+
+            // Singletons: ClaudeService owns one AnthropicClient (and with it
+            // one HttpClient) for the lifetime of the app, and the chat history
+            // store is only as long-lived as the IMemoryCache behind it.
+            services.AddMemoryCache();
+            services.AddSingleton<IChatHistoryStore, InMemoryChatHistoryStore>();
+            services.AddSingleton<IClaudeService, ClaudeService>();
+            services.AddSingleton<IAiUsageLimiter, InMemoryAiUsageLimiter>();
+
+            services.Configure<ClaudeSettings>(settings =>
+            {
+                configuration.GetSection("Claude").Bind(settings);
+
+                // appsettings.json ships with an empty key on purpose — no
+                // secrets in source control. Fall back to the environment
+                // variable the Anthropic SDK and CLI already use.
+                if (string.IsNullOrWhiteSpace(settings.ApiKey))
+                {
+                    settings.ApiKey =
+                        Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")
+                        ?? string.Empty;
+                }
+            });
 
 
 

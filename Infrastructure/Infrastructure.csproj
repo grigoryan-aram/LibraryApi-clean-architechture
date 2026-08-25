@@ -8,6 +8,8 @@
 
 	<ItemGroup>
 	
+		<PackageReference Include="Anthropic" Version="12.42.0" />
+	
 		<PackageReference Include="FluentEmail.Core" Version="3.0.2" />
 		<PackageReference Include="FluentEmail.MailKit" Version="3.0.2" />
 		<!-- NOTE: this drags in MailKit/MimeKit 2.10.1, both of which have open

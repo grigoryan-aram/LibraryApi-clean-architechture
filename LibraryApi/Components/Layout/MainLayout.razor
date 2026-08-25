@@ -1,0 +1,43 @@
+﻿@inherits LayoutComponentBase
+
+<div class="shell">
+    <header class="topbar">
+        <a class="brand" href="">
+            <span class="brand-mark">📖</span>
+            <span class="brand-text">
+                <strong>Athenaeum</strong>
+                <em>library api</em>
+            </span>
+        </a>
+
+        <nav class="nav">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">Home</NavLink>
+            <NavLink class="nav-link" href="chat">Chat</NavLink>
+            <NavLink class="nav-link" href="account">Account</NavLink>
+            <a class="nav-link nav-link-external" href="swagger" target="_blank">Swagger ↗</a>
+            <a class="nav-link nav-link-external" href="hangfire" target="_blank">Hangfire ↗</a>
+        </nav>
+
+        <div class="whoami">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="dot dot-on" title="signed in"></span>
+                    <span class="whoami-name">@context.User.Identity?.Name</span>
+                </Authorized>
+                <NotAuthorized>
+                    <span class="dot dot-off" title="signed out"></span>
+                    <span class="whoami-name muted">guest</span>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </header>
+
+    <main class="content">
+        @Body
+    </main>
+
+    <footer class="footer">
+        <span>Clean architecture · MediatR · ErrorOr · Blazor Server</span>
+        <span class="muted">components talk to the same handlers the controllers do</span>
+    </footer>
+</div>

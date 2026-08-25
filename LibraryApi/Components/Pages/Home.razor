@@ -1,0 +1,72 @@
+﻿@page "/"
+
+<PageTitle>Athenaeum — Library API</PageTitle>
+
+<section class="hero">
+    <div class="hero-copy">
+        <p class="eyebrow">ASP.NET Core · .NET 10 · clean architecture</p>
+        <h1>A library API<br />that answers back.</h1>
+        <p class="lede">
+            Books, categories, members and loans behind a CQRS pipeline — plus a
+            Claude-powered chat that runs through the very same handlers your
+            controllers call.
+        </p>
+        <div class="hero-actions">
+            <a class="btn btn-primary" href="chat">Open the chat</a>
+            <a class="btn btn-ghost" href="account">Sign in</a>
+        </div>
+    </div>
+
+    <div class="hero-art" aria-hidden="true">
+        <div class="stack">
+            <span class="book book-1"></span>
+            <span class="book book-2"></span>
+            <span class="book book-3"></span>
+            <span class="book book-4"></span>
+            <span class="book book-5"></span>
+        </div>
+        <div class="orb"></div>
+    </div>
+</section>
+
+<section class="cards">
+    <article class="card">
+        <span class="card-glyph">🧭</span>
+        <h2>One pipeline</h2>
+        <p>
+            Controller or component, every request lands on
+            <code>IMediator</code> → handler → repository. The chat page sends
+            <code>AskClaudeQuery</code> in-process, skipping a pointless HTTP hop
+            to our own API.
+        </p>
+    </article>
+
+    <article class="card">
+        <span class="card-glyph">🛡️</span>
+        <h2>One cookie</h2>
+        <p>
+            The Blazor circuit is authenticated by the same ASP.NET Identity
+            cookie <code>/api/Auth/login</code> issues, so
+            <code>[Authorize]</code> means the same thing in both worlds.
+        </p>
+    </article>
+
+    <article class="card">
+        <span class="card-glyph">⚡</span>
+        <h2>Live over WebSocket</h2>
+        <p>
+            Interactive pages run on a Blazor Server circuit — a persistent
+            WebSocket back to the host. No client bundle, no token plumbing,
+            no second deploy.
+        </p>
+    </article>
+
+    <article class="card">
+        <span class="card-glyph">🗄️</span>
+        <h2>Chat touches no database</h2>
+        <p>
+            Conversations live in <code>IMemoryCache</code> for thirty minutes.
+            The library tables are never read or written by the chat slice.
+        </p>
+    </article>
+</section>

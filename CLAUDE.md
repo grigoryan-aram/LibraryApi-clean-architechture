@@ -55,7 +55,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (8 tests across two projects, all passing):
+Test (32 tests across two projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -122,7 +122,7 @@ ASP.NET Core Identity with `IdentityUser`/`IdentityRole` and **cookie** auth (`A
 
 ## Background jobs and email
 
-Hangfire (`Infrastructure/DependencyInjection.cs`) uses SQL Server storage on the same `DefaultConnection` and auto-creates its own schema. `AddHangfireServer()` means jobs run in-process. `app.UseHangfireDashboard()` is mapped in `LibraryApi/Program.cs` **before** `UseAuthentication()`/`UseAuthorization()`, so `/hangfire` is publicly reachable.
+Hangfire (`Infrastructure/DependencyInjection.cs`) uses SQL Server storage on the same `DefaultConnection` and auto-creates its own schema. `AddHangfireServer()` means jobs run in-process. `app.UseHangfireDashboard("/hangfire", …)` is mapped in `LibraryApi/Program.cs` **after** `UseAuthentication()`/`UseAuthorization()` and carries a `HangfireDashboardAuthorization` filter (`LibraryApi/Extensions/`) that requires an authenticated user — anonymous callers get a 401. It used to sit before the auth middleware with no filter, which left the dashboard, and every job argument in it, open to anyone with the URL. Keep it where it is.
 
 Email is FluentEmail + MailKit, configured from the `Email` config section (also bound to `Infrastructure/Settings/EmailSettings`).
 
@@ -139,16 +139,61 @@ Two things to know before touching it:
 
 Still-dead leftovers from the same refactor, safe to delete: `UserRegisteredNotification` plus its handler `Application/Features/Notifications/SendEmailHandler.cs` (nothing publishes the notification). The older `IBackgroundJobService`/`BackgroundJobService` and its DI registration were removed in favour of Hangfire's `IBackgroundJobClient`; that deletion is committed.
 
+## Claude AI chat endpoint
+
+`GET /api/ClaudeAI?message=…&conversationId=…` is a chatbot usable straight from Swagger. It follows the normal slice shape — `ClaudeAIController` → `AskClaudeQuery` → `AskClaudeQueryHandler` → `IClaudeService` → `ClaudeService` (official `Anthropic` NuGet SDK, `client.Messages.Create`) — and is `[Authorize]` like the other resource controllers, so log in via `/api/Auth/login` first and Swagger's cookie carries over. It is a `Query` rather than a `Command` because it is a GET, matching the rest of the codebase.
+
+**This slice never touches `LibraryDBContext`.** Leave `conversationId` empty to start a chat; the reply carries the id to pass back on the next call. History lives in `IChatHistoryStore` / `InMemoryChatHistoryStore` (an `IMemoryCache` entry with a 30-minute sliding expiry) — process-local and lost on restart, which is fine for Swagger sessions but is *not* a durable store. The only database contact on such a request comes from the Identity cookie behind `[Authorize]`, not from the slice itself.
+
+Things that will bite:
+
+- **The API key is never in source control.** `appsettings.json` ships `Claude:ApiKey` empty; `Infrastructure/DependencyInjection.cs` falls back to the `ANTHROPIC_API_KEY` environment variable. Set it with `dotnet user-secrets set "Claude:ApiKey" "sk-ant-…"` from `LibraryApi/` (run `dotnet user-secrets init` once) or export the env var. With neither, the endpoint returns a `Claude.ApiKeyMissing` failure — it does not throw.
+- **`ClaudeService` is a singleton holding a `Lazy<AnthropicClient>`.** One `HttpClient` for the app's lifetime, and the client is only constructed once a key is present, which is what keeps the missing-key path an `ErrorOr` instead of a container-resolution exception on every request.
+- **Every stored turn is resent on the next call, so history is capped** at 20 messages in the handler and the message itself at 4000 characters in the validator. Both caps exist to bound cost; removing them is a billing decision.
+- **The call is non-streaming on purpose** — Swagger UI cannot render an SSE stream. Model, `MaxTokens` and the system prompt come from the `Claude` config section; `Effort.Medium` is set in code to keep the synchronous request from hanging Swagger.
+- **Errors are mapped, not thrown.** `ClaudeService` catches the SDK exception chain (unauthorized → rate limited → 5xx → I/O → base) and returns `Error.Failure` codes prefixed `Claude.*`, which `ToProblem` surfaces as a 400.
+
+## Blazor front end
+
+The host also serves a small Blazor Server UI from `LibraryApi/Components/` — `App.razor` (root document), `Routes.razor`, `Layout/MainLayout.razor`, and three pages: `Pages/Home.razor` (`/`), `Pages/Chat.razor` (`/chat`), `Pages/Account.razor` (`/account`). Styling is one hand-written `wwwroot/app.css`; `wwwroot/app.js` holds a single scroll helper. There is no client project and no JS build step.
+
+Wiring in `Program.cs`: `AddRazorComponents().AddInteractiveServerComponents()`, `AddCascadingAuthenticationState()`, `AddHttpContextAccessor()`, then `UseAntiforgery()` (after auth, before the endpoints), `MapStaticAssets()` and `MapRazorComponents<App>().AddInteractiveServerRenderMode()`.
+
+Four things here will waste your time if you do not know them:
+
+- **`@using Application.X` does not compile in a `.razor` file.** `RootNamespace` is `LibraryApi`, so Razor resolves it as `LibraryApi.Application.X`. `Components/_Imports.razor` pins them with `@using global::Application.DTOs` etc. Add new Application usings there, with `global::`.
+- **`Chat.razor` is interactive; `Account.razor` deliberately is not.** Signing in writes an auth cookie, and an interactive circuit has no response left to write headers on. The login/register/sign-out forms are static-SSR posts (`EditForm` + `FormName` + `[SupplyParameterFromForm]`), which is the same shape the ASP.NET Identity templates use. Do not add `@rendermode` to that page.
+- **`AuthorizeView` and `EditForm` both bind `context`.** Nesting a form inside `<AuthorizeView>` is a compile error until you name one — `Account.razor` uses `<AuthorizeView Context="auth">`.
+- **`ConfigureApplicationCookie` points `LoginPath` at `/account`.** Identity defaults to `/Account/Login`, which does not exist here, so a browser hitting `/chat` signed-out was being redirected to a 404. API callers are unaffected: the cookie handler still answers 401 when the request does not accept HTML, which is why `GET /api/ClaudeAI` returns 401 to curl but 302 to a browser.
+
+`Chat.razor` injects `IMediator` and sends `AskClaudeQuery` **in-process** — component → handler, no HTTP hop back into this same app. The interactive circuit is a WebSocket (SignalR); on hosting without WebSocket support SignalR silently falls back to long polling, which still works but is worse. The components have no unit tests — bUnit would be a new dependency for markup that holds no logic; they were verified by driving a real browser instead.
+
 ## Rate limiting
 
-Two mechanisms, neither currently limiting anything:
+Three mechanisms. Only the third actually limits anything:
 
 - The built-in fixed-window limiter named `"fixed"` is registered and `UseRateLimiter()` is called, but no endpoint carries `[EnableRateLimiting("fixed")]`.
 - `LibraryApi/MiddleWares/RateLimitPerIPMiddleWare.cs` is never added to the pipeline (and its `static Dictionary` counter is not thread-safe and never resets).
+- **`IAiUsageLimiter` caps Claude at one message per user per 24 hours** (`Claude:RateLimitHours`, 0 disables). `InMemoryAiUsageLimiter` keys an `IMemoryCache` entry on the requester with an absolute expiry.
+
+That last one deliberately sits **in `AskClaudeQueryHandler`, not on the endpoint**. ASP.NET Core's rate limiter only sees HTTP requests, and the Blazor chat page calls `IMediator` in-process — an `[EnableRateLimiting]` attribute would have limited curl while leaving the UI unlimited. Putting it behind the handler covers both entry points, which is the whole point.
+
+Two details worth keeping:
+
+- **The allowance is checked before the call and recorded only after Claude answers.** A failed turn (missing key, rate-limited upstream, refusal) costs the caller nothing — otherwise an unset API key would lock every user out for 24 hours over a failure that was never theirs.
+- **`AskClaudeQuery.Requester` is never model-bound.** The controller takes it from `User.Identity.Name` and `Chat.razor` from its cascading `AuthenticationState`; a caller cannot put it in the query string and spend someone else's allowance. The validator rejects an empty one, which would otherwise mean one shared allowance for everybody.
+
+Being in-memory, the allowance resets on restart and is per-instance. Fine for one small deployment; move it to the database if it ever has to be authoritative.
 
 ## Error handling
 
 `GlobalExceptionMiddleware` (in `LibraryApi/MiddleWares/ExceptionHandlingMiddleWare.cs` — class name and file name differ, and the class sits in the global namespace) logs and returns a generic 500 `ProblemDetails`. It is registered after the Hangfire dashboard and rate limiter, so it does not cover those.
+
+## Transport security
+
+`UseHttpsRedirection()` runs first in the pipeline and `UseHsts()` is added outside Development. The Identity cookie is `HttpOnly`, `SameSite=Lax`, and `SecurePolicy` is `Always` outside Development (`SameAsRequest` locally, so plain-http local runs still work).
+
+Two consequences: **the deployed site has to actually serve HTTPS** — with `Always`, a cookie issued over http is never sent back, so login silently fails — and `UseHsts()` emits nothing on `localhost` by design, so that header can only be confirmed on the real domain.
 
 ## Deployment
 
@@ -164,4 +209,27 @@ Two mechanisms, neither currently limiting anything:
 
 ## Secrets
 
-`LibraryApi/appsettings.json` and `LibraryApi/appsettings.Production.json` contain committed live-looking credentials (SQL Server passwords, a Gmail app password), and the publish profile carries the deploy username. Do not add more secrets to these files, and do not echo the existing values into logs, commits, or anything outbound.
+**Nothing secret lives in `appsettings*.json` any more.** `ConnectionStrings:DefaultConnection`, `Email:User`, `Email:Password` and `Claude:ApiKey` are all empty strings in both files. Non-secret settings (`Email:From`, `Email:Smtp:*`, the `Claude` model/limits) stay in config.
+
+Local development reads them from **user secrets** (`UserSecretsId` is on `Presentation.csproj`; the values are already set on this machine):
+
+```bash
+dotnet user-secrets list
+```
+
+```bash
+dotnet user-secrets set "Claude:ApiKey" "sk-ant-..."
+```
+
+Production reads them from **environment variables** on the host — double underscore for nesting:
+
+```
+ConnectionStrings__DefaultConnection
+Email__User
+Email__Password
+Claude__ApiKey        (or ANTHROPIC_API_KEY, which Infrastructure/DependencyInjection.cs falls back to)
+```
+
+`AddInfrastructure` throws at startup with a pointed message if the connection string is missing, rather than failing later inside EF.
+
+**The old values are still in git history** (`git log -p -- LibraryApi/appsettings.json`), so scrubbing the files did not un-leak them — the SQL password and the Gmail app password both need rotating. The publish profile still carries the deploy username. Do not add new secrets to these files, and do not echo the existing values into logs, commits, or anything outbound.
