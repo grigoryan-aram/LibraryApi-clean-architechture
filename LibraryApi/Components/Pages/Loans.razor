@@ -1,0 +1,219 @@
+﻿@page "/loans"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using global::Application.Features.Books.Queries
+@using global::Application.Features.Loans.Commands
+@using global::Application.Features.Loans.Queries
+@using global::Application.Features.Members.Queries
+@inject IMediator Mediator
+
+<PageTitle>Loans — Athenaeum</PageTitle>
+
+<section class="page">
+
+    <header class="page-head">
+        <div>
+            <h1>Loans</h1>
+            <p class="muted">Who has what, joined against the books and members tables.</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-num">@_loans.Count</span>
+                <span class="stat-label">total</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num stat-warn">@_loans.Count(l => l.ReturnedAt is null)</span>
+                <span class="stat-label">out now</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num stat-ok">@_loans.Count(l => l.ReturnedAt is not null)</span>
+                <span class="stat-label">returned</span>
+            </div>
+        </div>
+    </header>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-error" role="alert">@_error</div>
+    }
+
+    <form class="inline-form" @onsubmit="LendAsync" @onsubmit:preventDefault>
+        <label class="field-inline">
+            <span>Book</span>
+            <select @bind="_newBookId">
+                <option value="0">Pick a book…</option>
+                @foreach (var book in _books.Where(b => !b.IsBorrowed).OrderBy(b => b.Title))
+                {
+                    <option value="@book.Id">@book.Title</option>
+                }
+            </select>
+        </label>
+
+        <label class="field-inline">
+            <span>Member</span>
+            <select @bind="_newMemberId">
+                <option value="0">Pick a member…</option>
+                @foreach (var member in _members.OrderBy(m => m.Name))
+                {
+                    <option value="@member.id">@member.Name</option>
+                }
+            </select>
+        </label>
+
+        <button class="btn btn-primary" type="submit" disabled="@_busy">Lend it out</button>
+    </form>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading loans…</p>
+    }
+    else if (_loans.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty-glyph">◇</span>
+            <p>No loans on record.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Book</th>
+                        <th>Member</th>
+                        <th>Borrowed</th>
+                        <th>Returned</th>
+                        <th>Status</th>
+                        <th class="right">—</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var loan in _loans.OrderByDescending(l => l.BorrowedAt))
+                    {
+                        <tr>
+                            <td class="strong">@BookTitle(loan.BookId)</td>
+                            <td>@MemberName(loan.MemberId)</td>
+                            <td class="mono">@loan.BorrowedAt.ToString("yyyy-MM-dd")</td>
+                            <td class="mono">@(loan.ReturnedAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                            <td>
+                                @if (loan.ReturnedAt is null)
+                                {
+                                    var days = (int)(DateTime.UtcNow - loan.BorrowedAt).TotalDays;
+                                    <span class="badge @(days > 30 ? "badge-late" : "badge-warn")">
+                                        @(days > 30 ? $"{days} days out" : "out")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-ok">closed</span>
+                                }
+                            </td>
+                            <td class="right">
+                                <button class="btn-icon" title="Delete this loan record"
+                                        disabled="@_busy" @onclick="() => DeleteAsync(loan)">
+                                    ✕
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="fineprint muted">
+            There is no update endpoint for a loan, so a book cannot be marked
+            returned from here — only lent or the record deleted. Adding
+            <code>UpdateLoanCommand</code> would close that gap.
+        </p>
+    }
+
+</section>
+
+@code {
+    private List<LoansDTO> _loans = [];
+    private List<BooksDTO> _books = [];
+    private List<MembersDTO> _members = [];
+
+    private int _newBookId;
+    private int _newMemberId;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private string BookTitle(int bookId) =>
+        _books.FirstOrDefault(b => b.Id == bookId)?.Title ?? $"book #{bookId}";
+
+    private string MemberName(int memberId) =>
+        _members.FirstOrDefault(m => m.id == memberId)?.Name ?? $"member #{memberId}";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        var loans = await Mediator.Send(new GetAllLoansQuery());
+        var books = await Mediator.Send(new GetAllBooksQuery());
+        var members = await Mediator.Send(new GetAllMembersQuery());
+
+        _loans = loans.IsError ? [] : loans.Value.ToList();
+        _books = books.IsError ? [] : books.Value.ToList();
+        _members = members.IsError ? [] : members.Value.ToList();
+
+        _error = loans.IsError ? loans.FirstError.Description : null;
+        _loading = false;
+    }
+
+    private async Task LendAsync()
+    {
+        if (_newBookId == 0 || _newMemberId == 0)
+        {
+            _error = "Pick both a book and a member.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        var result = await Mediator.Send(new AddLoanCommand(
+            _newBookId,
+            _newMemberId,
+            DateTime.UtcNow,
+            null));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
+            _newBookId = 0;
+            _newMemberId = 0;
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+
+    private async Task DeleteAsync(LoansDTO loan)
+    {
+        _busy = true;
+        _error = null;
+
+        var result = await Mediator.Send(new DeleteLoanCommand(loan.Id));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+}

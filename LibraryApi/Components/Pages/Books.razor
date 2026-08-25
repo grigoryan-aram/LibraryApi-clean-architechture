@@ -1,0 +1,256 @@
+﻿@page "/books"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using global::Application.Features.Books.Commands
+@using global::Application.Features.Books.Queries
+@using global::Application.Features.Categorys.Query
+@inject IMediator Mediator
+
+<PageTitle>Books — Athenaeum</PageTitle>
+
+<section class="page">
+
+    <header class="page-head">
+        <div>
+            <h1>Books</h1>
+            <p class="muted">Everything in the catalogue, straight from <code>GetAllBooksQuery</code>.</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-num">@_books.Count</span>
+                <span class="stat-label">total</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num stat-warn">@_books.Count(b => b.IsBorrowed)</span>
+                <span class="stat-label">on loan</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num stat-ok">@_books.Count(b => !b.IsBorrowed)</span>
+                <span class="stat-label">available</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num">@_categories.Count</span>
+                <span class="stat-label">shelves</span>
+            </div>
+        </div>
+    </header>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-error" role="alert">@_error</div>
+    }
+
+    <div class="toolbar">
+        <input class="search" placeholder="Search title or author…" @bind="_search" @bind:event="oninput" />
+
+        <select class="select" @bind="_categoryFilter">
+            <option value="0">Every shelf</option>
+            @foreach (var category in _categories)
+            {
+                <option value="@category.id">@category.Name</option>
+            }
+        </select>
+
+        <label class="checkbox">
+            <input type="checkbox" @bind="_availableOnly" />
+            <span>Available only</span>
+        </label>
+
+        <span class="toolbar-count muted">@Filtered.Count() shown</span>
+
+        <button class="btn btn-ghost btn-sm" @onclick="ToggleAddForm">
+            @(_showAdd ? "Cancel" : "+ Add a book")
+        </button>
+    </div>
+
+    @if (_showAdd)
+    {
+        <form class="inline-form" @onsubmit="AddAsync" @onsubmit:preventDefault>
+            <label class="field-inline">
+                <span>Title</span>
+                <input @bind="_newTitle" placeholder="The Iliad" />
+            </label>
+            <label class="field-inline">
+                <span>Author</span>
+                <input @bind="_newAuthor" placeholder="Homer" />
+            </label>
+            <label class="field-inline">
+                <span>Shelf</span>
+                <select @bind="_newCategoryId">
+                    <option value="0">Pick one…</option>
+                    @foreach (var category in _categories)
+                    {
+                        <option value="@category.id">@category.Name</option>
+                    }
+                </select>
+            </label>
+            <button class="btn btn-primary" type="submit" disabled="@_busy">Add</button>
+        </form>
+    }
+
+    @if (_loading)
+    {
+        <p class="muted">Loading the catalogue…</p>
+    }
+    else if (!Filtered.Any())
+    {
+        <div class="empty">
+            <span class="empty-glyph">◇</span>
+            <p>Nothing matches that.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Author</th>
+                        <th>Shelf</th>
+                        <th>Status</th>
+                        <th class="right">—</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var book in Filtered)
+                    {
+                        <tr>
+                            <td class="strong">@book.Title</td>
+                            <td>@book.Author</td>
+                            <td><span class="tag">@CategoryName(book.CategoryId)</span></td>
+                            <td>
+                                @if (book.IsBorrowed)
+                                {
+                                    <span class="badge badge-warn">on loan</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-ok">available</span>
+                                }
+                            </td>
+                            <td class="right">
+                                <button class="btn-icon" title="Remove from the catalogue"
+                                        disabled="@_busy" @onclick="() => DeleteAsync(book)">
+                                    ✕
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+</section>
+
+@code {
+    private List<BooksDTO> _books = [];
+    private List<CategorysDTO> _categories = [];
+
+    private string _search = string.Empty;
+    private int _categoryFilter;
+    private bool _availableOnly;
+    private bool _showAdd;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private string _newTitle = string.Empty;
+    private string _newAuthor = string.Empty;
+    private int _newCategoryId;
+
+    private IEnumerable<BooksDTO> Filtered =>
+        _books
+            .Where(b => _categoryFilter == 0 || b.CategoryId == _categoryFilter)
+            .Where(b => !_availableOnly || !b.IsBorrowed)
+            .Where(b => string.IsNullOrWhiteSpace(_search)
+                        || b.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                        || b.Author.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(b => b.Title);
+
+    private string CategoryName(int categoryId) =>
+        _categories.FirstOrDefault(c => c.id == categoryId)?.Name ?? "unshelved";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        var books = await Mediator.Send(new GetAllBooksQuery());
+        var categories = await Mediator.Send(new GetAllCategorysQuery());
+
+        _books = books.IsError ? [] : books.Value.ToList();
+        _categories = categories.IsError ? [] : categories.Value.ToList();
+
+        _error = books.IsError ? books.FirstError.Description : null;
+        _loading = false;
+    }
+
+    private void ToggleAddForm()
+    {
+        _showAdd = !_showAdd;
+        _error = null;
+    }
+
+    private async Task AddAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newTitle) || string.IsNullOrWhiteSpace(_newAuthor))
+        {
+            _error = "A book needs a title and an author.";
+            return;
+        }
+
+        if (_newCategoryId == 0)
+        {
+            _error = "Pick a shelf for it.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        // Straight to the same handler the POST /api/Books endpoint uses.
+        var result = await Mediator.Send(new AddBookCommand(
+            _newTitle.Trim(),
+            _newAuthor.Trim(),
+            _newCategoryId,
+            false));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
+            _newTitle = string.Empty;
+            _newAuthor = string.Empty;
+            _showAdd = false;
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+
+    private async Task DeleteAsync(BooksDTO book)
+    {
+        _busy = true;
+        _error = null;
+
+        var result = await Mediator.Send(new DeleteBookCommand(book.Id));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+}

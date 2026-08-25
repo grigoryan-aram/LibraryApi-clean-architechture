@@ -14,16 +14,10 @@ namespace Infrastructure.Repositories
             _context = context;
         }
 
-        public async Task<LoanModel> AddLoanAsync(int bookId, int memberId, CancellationToken cancellationToken)
+        public async Task<LoanModel> AddLoanAsync(LoanModel loan, CancellationToken cancellationToken)
         {
-            var loan = new LoanModel
-            {
-                BookId = bookId,
-                MemberId = memberId
-            };
-
-            await _context.Loans.AddAsync(loan);
-            await _context.SaveChangesAsync();
+            await _context.Loans.AddAsync(loan, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
             return loan;
         }
 

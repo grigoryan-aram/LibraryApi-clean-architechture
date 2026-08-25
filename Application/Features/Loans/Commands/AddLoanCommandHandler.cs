@@ -22,7 +22,7 @@ namespace Application.Features.Loans.Commands
         {
             var loan = request.Adapt<LoanModel>();
 
-            var result = await _loansRepository.AddLoanAsync(loan.BookId, loan.MemberId, cancellationToken);
+            var result = await _loansRepository.AddLoanAsync(loan, cancellationToken);
 
             if (result == null)
             {

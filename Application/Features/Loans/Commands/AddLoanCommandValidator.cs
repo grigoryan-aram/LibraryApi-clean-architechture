@@ -20,15 +20,19 @@ namespace Application.Features.Loans.Commands
 
             RuleFor
                 (x => x.BorrowedAt)
-                .NotEmpty().WithMessage("Date is required.")
-                .LessThanOrEqualTo(DateTime.Now).WithMessage("Date cannot be in the future/past.");
+                .NotEmpty().WithMessage("BorrowedAt is required.")
+                .LessThanOrEqualTo(_ => DateTime.UtcNow.AddMinutes(1))
+                    .WithMessage("BorrowedAt cannot be in the future.");
 
+            // ReturnedAt is deliberately optional: a loan that has just been
+            // handed out has not been returned yet. Requiring it here made it
+            // impossible to create an open loan at all, which is the only kind
+            // worth creating.
             RuleFor
                 (x => x.ReturnedAt)
-                .NotEmpty().WithMessage("ReturnDate is required.")
-                .GreaterThanOrEqualTo(x => x.BorrowedAt).WithMessage("ReturnDate cannot be before BorrowedAt.");
-
-
+                .GreaterThanOrEqualTo(x => x.BorrowedAt)
+                    .When(x => x.ReturnedAt.HasValue)
+                    .WithMessage("ReturnedAt cannot be before BorrowedAt.");
 
         }
 

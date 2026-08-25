@@ -1,0 +1,160 @@
+﻿@page "/categories"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using global::Application.Features.Books.Queries
+@using global::Application.Features.Categorys.Commands
+@using global::Application.Features.Categorys.Query
+@inject IMediator Mediator
+
+<PageTitle>Shelves — Athenaeum</PageTitle>
+
+<section class="page">
+
+    <header class="page-head">
+        <div>
+            <h1>Shelves</h1>
+            <p class="muted">
+                Categories, with how many books sit on each.
+                @* The domain spells it "Categorys" throughout; the UI says shelves. *@
+            </p>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-num">@_categories.Count</span>
+                <span class="stat-label">shelves</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num">@_books.Count</span>
+                <span class="stat-label">books</span>
+            </div>
+        </div>
+    </header>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-error" role="alert">@_error</div>
+    }
+
+    <form class="inline-form" @onsubmit="AddAsync" @onsubmit:preventDefault>
+        <label class="field-inline">
+            <span>Name</span>
+            <input @bind="_newName" placeholder="Poetry" />
+        </label>
+        <button class="btn btn-primary" type="submit" disabled="@_busy">Add shelf</button>
+    </form>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading shelves…</p>
+    }
+    else if (_categories.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty-glyph">◇</span>
+            <p>No shelves yet.</p>
+        </div>
+    }
+    else
+    {
+        <div class="cards cards-tight">
+            @foreach (var category in _categories.OrderBy(c => c.Name))
+            {
+                var count = _books.Count(b => b.CategoryId == category.id);
+
+                <article class="card card-row">
+                    <div class="shelf-mark" style="--n:@Math.Min(count, 6)">
+                        @for (var i = 0; i < Math.Min(count, 6); i++)
+                        {
+                            <span class="shelf-book"></span>
+                        }
+                    </div>
+
+                    <div class="card-body">
+                        <h2>@category.Name</h2>
+                        <p class="muted">@count book@(count == 1 ? "" : "s")</p>
+                    </div>
+
+                    <button class="btn-icon" title="Remove this shelf"
+                            disabled="@_busy" @onclick="() => DeleteAsync(category)">
+                        ✕
+                    </button>
+                </article>
+            }
+        </div>
+    }
+
+</section>
+
+@code {
+    private List<CategorysDTO> _categories = [];
+    private List<BooksDTO> _books = [];
+
+    private string _newName = string.Empty;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        var categories = await Mediator.Send(new GetAllCategorysQuery());
+        var books = await Mediator.Send(new GetAllBooksQuery());
+
+        _categories = categories.IsError ? [] : categories.Value.ToList();
+        _books = books.IsError ? [] : books.Value.ToList();
+
+        _error = categories.IsError ? categories.FirstError.Description : null;
+        _loading = false;
+    }
+
+    private async Task AddAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName))
+        {
+            _error = "A shelf needs a name.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        // Id 0 - the database assigns the real one on insert.
+        var result = await Mediator.Send(new AddCategoryCommand(0, _newName.Trim()));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
+            _newName = string.Empty;
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+
+    private async Task DeleteAsync(CategorysDTO category)
+    {
+        _busy = true;
+        _error = null;
+
+        var result = await Mediator.Send(new DeleteCategoryCommand(category.id));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+}

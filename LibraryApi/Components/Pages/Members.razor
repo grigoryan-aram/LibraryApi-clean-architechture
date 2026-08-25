@@ -1,0 +1,173 @@
+﻿@page "/members"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using global::Application.Features.Loans.Queries
+@using global::Application.Features.Members.Commands
+@using global::Application.Features.Members.Queries
+@inject IMediator Mediator
+
+<PageTitle>Members — Athenaeum</PageTitle>
+
+<section class="page">
+
+    <header class="page-head">
+        <div>
+            <h1>Members</h1>
+            <p class="muted">Everyone who can borrow, with what they currently hold.</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-num">@_members.Count</span>
+                <span class="stat-label">members</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num stat-warn">@_loans.Count(l => l.ReturnedAt is null)</span>
+                <span class="stat-label">books out</span>
+            </div>
+        </div>
+    </header>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-error" role="alert">@_error</div>
+    }
+
+    <form class="inline-form" @onsubmit="AddAsync" @onsubmit:preventDefault>
+        <label class="field-inline">
+            <span>Name</span>
+            <input @bind="_newName" placeholder="Ada Lovelace" />
+        </label>
+        <button class="btn btn-primary" type="submit" disabled="@_busy">Add member</button>
+    </form>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading members…</p>
+    }
+    else if (_members.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty-glyph">◇</span>
+            <p>No members yet.</p>
+        </div>
+    }
+    else
+    {
+        <div class="cards cards-tight">
+            @foreach (var member in _members.OrderBy(m => m.Name))
+            {
+                var out_ = _loans.Count(l => l.MemberId == member.id && l.ReturnedAt is null);
+
+                <article class="card card-row">
+                    <div class="avatar avatar-lg">@Initials(member.Name)</div>
+
+                    <div class="card-body">
+                        <h2>@member.Name</h2>
+                        <p class="muted">
+                            @if (out_ == 0)
+                            {
+                                <span>nothing on loan</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-warn">@out_ book@(out_ == 1 ? "" : "s") out</span>
+                            }
+                        </p>
+                    </div>
+
+                    <button class="btn-icon" title="Remove this member"
+                            disabled="@_busy" @onclick="() => DeleteAsync(member)">
+                        ✕
+                    </button>
+                </article>
+            }
+        </div>
+    }
+
+</section>
+
+@code {
+    private List<MembersDTO> _members = [];
+    private List<LoansDTO> _loans = [];
+
+    private string _newName = string.Empty;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+        };
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        var members = await Mediator.Send(new GetAllMembersQuery());
+        var loans = await Mediator.Send(new GetAllLoansQuery());
+
+        _members = members.IsError ? [] : members.Value.ToList();
+        _loans = loans.IsError ? [] : loans.Value.ToList();
+
+        _error = members.IsError ? members.FirstError.Description : null;
+        _loading = false;
+    }
+
+    private async Task AddAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName))
+        {
+            _error = "A member needs a name.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        // Id 0 - the database assigns the real one on insert.
+        var result = await Mediator.Send(new AddMemberCommand(0, _newName.Trim()));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
+            _newName = string.Empty;
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+
+    private async Task DeleteAsync(MembersDTO member)
+    {
+        _busy = true;
+        _error = null;
+
+        var result = await Mediator.Send(new DeleteMemberCommand(member.id));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+}
