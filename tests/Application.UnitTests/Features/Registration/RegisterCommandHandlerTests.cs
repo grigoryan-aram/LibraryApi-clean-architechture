@@ -6,6 +6,7 @@ using ErrorOr;
 using Hangfire;
 using Hangfire.Common;
 using Hangfire.States;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Registration;
@@ -22,16 +23,18 @@ public class RegisterCommandHandlerTests
         new("ada", "ada@example.com");
 
     private global::RegisterCommandHandler CreateSut() =>
-        new(_identityService.Object, _backgroundJobClient.Object);
+        new(_identityService.Object,
+            _backgroundJobClient.Object,
+            NullLogger<global::RegisterCommandHandler>.Instance);
 
-    private void GivenRegistrationReturns(RegisteredUserDTO? user) =>
+    private void GivenRegistrationReturns(ErrorOr<RegisteredUserDTO> result) =>
         _identityService
             .Setup(s => s.RegisterAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user!);
+            .ReturnsAsync(result);
 
     [Fact]
     public async Task Returns_the_registered_user_when_identity_succeeds()
@@ -45,16 +48,27 @@ public class RegisterCommandHandlerTests
         Assert.Equal("ada@example.com", result.Value.Email);
     }
 
+    // The whole point of the ErrorOr signature: whatever Identity said about
+    // why it refused has to reach the caller. Collapsing it into one opaque
+    // failure is what made a broken registration undiagnosable in production.
     [Fact]
-    public async Task Returns_a_failure_error_when_identity_returns_no_user()
+    public async Task Passes_every_identity_error_through_untouched()
     {
-        GivenRegistrationReturns(null);
+        GivenRegistrationReturns(new List<Error>
+        {
+            Error.Validation("Identity.PasswordRequiresDigit", "Passwords must have at least one digit."),
+            Error.Validation("Identity.DuplicateUserName", "Username 'ada' is already taken.")
+        });
 
         var result = await CreateSut().Handle(Command, CancellationToken.None);
 
         Assert.True(result.IsError);
-        Assert.Equal(ErrorType.Failure, result.FirstError.Type);
-        Assert.Equal("failed to create user", result.FirstError.Code);
+        Assert.Equal(2, result.Errors.Count);
+        Assert.Equal(ErrorType.Validation, result.FirstError.Type);
+        Assert.Equal("Identity.PasswordRequiresDigit", result.FirstError.Code);
+        Assert.Contains(
+            result.Errors,
+            error => error.Description == "Username 'ada' is already taken.");
     }
 
     // The handler takes (Username, Password, Email) but IIdentityService takes
@@ -99,12 +113,33 @@ public class RegisterCommandHandlerTests
     [Fact]
     public async Task Does_not_enqueue_any_job_when_registration_fails()
     {
-        GivenRegistrationReturns(null);
+        GivenRegistrationReturns(new List<Error>
+        {
+            Error.Validation("Identity.PasswordTooShort", "Passwords must be at least 6 characters.")
+        });
 
         await CreateSut().Handle(Command, CancellationToken.None);
 
         _backgroundJobClient.Verify(
             c => c.Create(It.IsAny<Job>(), It.IsAny<IState>()),
             Times.Never);
+    }
+
+    // The account exists by the time the job is queued. A Hangfire outage — a
+    // missing schema on a fresh database, a SQL user without rights — must not
+    // report failure for a registration that actually succeeded, or the caller
+    // retries forever against a username they already own.
+    [Fact]
+    public async Task Still_succeeds_when_the_job_cannot_be_queued()
+    {
+        GivenRegistrationReturns(RegisteredUser);
+        _backgroundJobClient
+            .Setup(c => c.Create(It.IsAny<Job>(), It.IsAny<IState>()))
+            .Throws(new InvalidOperationException("Hangfire schema is missing."));
+
+        var result = await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.False(result.IsError);
+        Assert.Equal("ada", result.Value.Username);
     }
 }

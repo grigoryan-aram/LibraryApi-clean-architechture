@@ -35,7 +35,7 @@ namespace Infrastructure.Services
             return new LoginResponseDTO("Login successful");
         }
 
-        public async Task<RegisteredUserDTO> RegisterAsync(
+        public async Task<ErrorOr<RegisteredUserDTO>> RegisterAsync(
             string username,
             string email,
             string password,
@@ -51,7 +51,15 @@ namespace Infrastructure.Services
 
             if (!result.Succeeded)
             {
-                return null!;
+                // Identity's own messages are the only thing that explains a
+                // refused registration — a weak password, a taken username, a
+                // duplicate email. Pass every one of them through instead of
+                // flattening them into a single opaque failure.
+                return result.Errors
+                    .Select(error => Error.Validation(
+                        code: $"Identity.{error.Code}",
+                        description: error.Description))
+                    .ToList();
             }
 
             return new RegisteredUserDTO(
