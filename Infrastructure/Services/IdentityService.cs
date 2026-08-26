@@ -2,7 +2,9 @@
 using Application.DTOs;
 using Application.ServiceInterfaces;
 using ErrorOr;
+using LibraryApi.Domain.Constants;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Services
 {
@@ -10,11 +12,16 @@ namespace Infrastructure.Services
     {
         private readonly UserManager<IdentityUser> _userManager;
         private readonly SignInManager<IdentityUser> _signInManager;
+        private readonly ILogger<IdentityService> _logger;
 
-        public IdentityService(UserManager<IdentityUser> userManager, SignInManager<IdentityUser> signInManager)
+        public IdentityService(
+            UserManager<IdentityUser> userManager,
+            SignInManager<IdentityUser> signInManager,
+            ILogger<IdentityService> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<LoginResponseDTO>> LoginAsync(string username, string password, CancellationToken cancellationToken)
@@ -60,6 +67,24 @@ namespace Infrastructure.Services
                         code: $"Identity.{error.Code}",
                         description: error.Description))
                     .ToList();
+            }
+
+            // Everyone who registers is a plain User. Admin is granted only by
+            // the startup seeder, so there is no path from the public
+            // registration endpoint to the Swagger or Hangfire dashboards.
+            var role = await _userManager.AddToRoleAsync(user, Roles.User);
+
+            if (!role.Succeeded)
+            {
+                // The account already exists by now. Refusing here would tell
+                // the caller registration failed while their username was in
+                // fact taken — by them. Log it instead: an account with no
+                // role can still use everything but the two dashboards.
+                _logger.LogError(
+                    "Registered {Username} but could not grant the {Role} role: {Errors}",
+                    user.UserName,
+                    Roles.User,
+                    string.Join("; ", role.Errors.Select(error => error.Description)));
             }
 
             return new RegisteredUserDTO(

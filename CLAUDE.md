@@ -14,6 +14,7 @@ The solution is **`LibraryApi.slnx`** at the repo root.
 | Presentation (web host) | `LibraryApi/Presentation.csproj` | Infrastructure |
 | Application tests | `tests/Application.UnitTests/` | Application |
 | Infrastructure tests | `tests/Infrastructure.UnitTests/` | Infrastructure |
+| Presentation tests | `tests/Presentation.UnitTests/` | Presentation |
 
 Presentation references only Infrastructure; Application/Domain come in transitively. Keep the inward dependency flow: Domain has no dependencies, Application depends only on Domain plus abstractions it declares itself, Infrastructure implements those abstractions.
 
@@ -55,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (32 tests across two projects, all passing):
+Test (58 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -120,9 +121,28 @@ ASP.NET Core Identity with `IdentityUser`/`IdentityRole` and **cookie** auth (`A
 
 `AuthController.Login` calls `SignInManager.PasswordSignInAsync` directly, bypassing MediatR. The parallel `Application/Features/Login/` slice and `IIdentityService.LoginAsync` implement the same thing and are currently unreferenced — if you touch login, pick one path rather than editing both.
 
+### Roles
+
+Two roles, named once in `Domain/Constants/Roles.cs`: **`Admin`** and **`User`**. They exist to keep the **Swagger UI and the Hangfire dashboard** — the two surfaces that expose every endpoint and every job argument — away from ordinary accounts. Nothing else checks a role; the resource controllers still ask only for `[Authorize]`.
+
+- **`User` is granted by `IdentityService.RegisterAsync`** to every account it creates. There is deliberately no path from the public registration endpoint to `Admin`.
+- **`Admin` is granted only by `IdentitySeeder`** (`Infrastructure/Identity/`), which runs from `Program.cs` in the same startup scope as `Database.Migrate()`, right after it. It creates any missing role, then creates the account named by `Identity:Admin` and puts it in `Admin`. Everything it does is guarded by an existence check, so it is safe on every start.
+- **The seed admin's credentials are never in `appsettings*.json`** — `Identity:Admin:UserName`, `:Email` and `:Password` ship empty, exactly like the other secrets. Set them with `dotnet user-secrets set "Identity:Admin:Password" "…"` from `LibraryApi/`, or in `appsettings.Secrets.json` on the host. With any of the three missing the seeder logs a warning and creates no administrator — a default password in config would be a back door on every deployment.
+- **An existing account is promoted, never re-passworded.** If `Identity:Admin:UserName` names a user who already exists, the seeder adds the role and leaves the password alone; rotating it on every start would undo any change made through the app.
+
+Both gates ask `AdminAccess.IsAdmin` (`LibraryApi/Extensions/AdminAccess.cs`) so they cannot drift apart:
+
+- **Hangfire** — `HangfireDashboardAuthorization` returns false for anyone without the role. Hangfire's dashboard has no notion of a redirect, so that is a flat 401 for anonymous and non-admin alike.
+- **Swagger** — `AdminOnlyPathMiddleWare` (`LibraryApi/MiddleWares/`) gates the `/swagger` prefix, mapped in `Program.cs` immediately before `UseSwagger()`. Swagger is served by middleware, not an endpoint, so there is no route to hang `[Authorize(Roles = "Admin")]` on; gating the path is the only way. It **challenges** an anonymous caller (the cookie handler turns that into a redirect to `/account` for a browser, a 401 for anything else) and **forbids** a signed-in non-admin, because signing in again would change nothing. The prefix match also covers `/swagger/v1/swagger.json` — gating only the UI page would leave the document readable.
+
+Two things that will look like bugs and are not:
+
+- **Role claims live in the auth cookie**, minted at sign-in. A user who was signed in when their role changed keeps the old answer until the cookie is refreshed or they sign in again. After seeding a new admin, sign out and back in.
+- The Swagger and Hangfire links in `MainLayout.razor` are inside `<AuthorizeView Roles="@Roles.Admin">`, so they disappear for everyone else. That is cosmetic only — the two gates above are the actual enforcement.
+
 ## Background jobs and email
 
-Hangfire (`Infrastructure/DependencyInjection.cs`) uses SQL Server storage on the same `DefaultConnection` and auto-creates its own schema. `AddHangfireServer()` means jobs run in-process. `app.UseHangfireDashboard("/hangfire", …)` is mapped in `LibraryApi/Program.cs` **after** `UseAuthentication()`/`UseAuthorization()` and carries a `HangfireDashboardAuthorization` filter (`LibraryApi/Extensions/`) that requires an authenticated user — anonymous callers get a 401. It used to sit before the auth middleware with no filter, which left the dashboard, and every job argument in it, open to anyone with the URL. Keep it where it is.
+Hangfire (`Infrastructure/DependencyInjection.cs`) uses SQL Server storage on the same `DefaultConnection` and auto-creates its own schema. `AddHangfireServer()` means jobs run in-process. `app.UseHangfireDashboard("/hangfire", …)` is mapped in `LibraryApi/Program.cs` **after** `UseAuthentication()`/`UseAuthorization()` and carries a `HangfireDashboardAuthorization` filter (`LibraryApi/Extensions/`) that requires the **`Admin`** role — see **Roles** above; everyone else gets a 401. It used to sit before the auth middleware with no filter, which left the dashboard, and every job argument in it, open to anyone with the URL. Keep it where it is.
 
 Email is FluentEmail + MailKit, configured from the `Email` config section (also bound to `Infrastructure/Settings/EmailSettings`).
 
@@ -211,7 +231,7 @@ Do not "fix" this by setting `Secure` while the host is HTTP-only: the browser a
 
 ## Secrets
 
-**Nothing secret lives in `appsettings*.json` any more.** `ConnectionStrings:DefaultConnection`, `Email:User`, `Email:Password` and `Claude:ApiKey` are all empty strings in both files. Non-secret settings (`Email:From`, `Email:Smtp:*`, the `Claude` model/limits) stay in config.
+**Nothing secret lives in `appsettings*.json` any more.** `ConnectionStrings:DefaultConnection`, `Email:User`, `Email:Password`, `Claude:ApiKey` and `Identity:Admin:*` are all empty strings in both files. Non-secret settings (`Email:From`, `Email:Smtp:*`, the `Claude` model/limits) stay in config.
 
 Local development reads them from **user secrets** (`UserSecretsId` is on `Presentation.csproj`; the values are already set on this machine):
 
@@ -230,6 +250,9 @@ ConnectionStrings__DefaultConnection
 Email__User
 Email__Password
 Claude__ApiKey        (or ANTHROPIC_API_KEY, which Infrastructure/DependencyInjection.cs falls back to)
+Identity__Admin__UserName
+Identity__Admin__Email
+Identity__Admin__Password
 ```
 
 `AddInfrastructure` throws at startup with a pointed message if the connection string is missing, rather than failing later inside EF.

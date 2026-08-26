@@ -27,7 +27,22 @@
             <div class="panel panel-single">
                 <span class="panel-glyph">✓</span>
                 <h2>Signed in as @auth.User.Identity?.Name</h2>
-                <p class="muted">The chat page and every <code>[Authorize]</code> endpoint are open to you.</p>
+
+                @if (auth.User.IsInRole(Roles.Admin))
+                {
+                    <p class="muted">
+                        You hold the <strong>@Roles.Admin</strong> role — the Swagger UI and the
+                        Hangfire dashboard are open to you as well.
+                    </p>
+                }
+                else
+                {
+                    <p class="muted">
+                        The chat page and every <code>[Authorize]</code> endpoint are open to you.
+                        <code>/swagger</code> and <code>/hangfire</code> need the
+                        <strong>@Roles.Admin</strong> role, which only the startup seeder grants.
+                    </p>
+                }
 
                 <div class="panel-actions">
                     <a class="btn btn-primary" href="chat">Go to the chat</a>

@@ -18,8 +18,12 @@
             <NavLink class="nav-link" href="categories">Shelves</NavLink>
             <NavLink class="nav-link" href="chat">Chat</NavLink>
             <NavLink class="nav-link" href="account">Account</NavLink>
-            <a class="nav-link nav-link-external" href="swagger" target="_blank">Swagger ↗</a>
-            <a class="nav-link nav-link-external" href="hangfire" target="_blank">Hangfire ↗</a>
+            @* Both dashboards are Admin-only server side. Hiding the links
+               from everyone else is cosmetic — the gates are the real thing. *@
+            <AuthorizeView Roles="@Roles.Admin" Context="admin">
+                <a class="nav-link nav-link-external" href="swagger" target="_blank">Swagger ↗</a>
+                <a class="nav-link nav-link-external" href="hangfire" target="_blank">Hangfire ↗</a>
+            </AuthorizeView>
         </nav>
 
         <div class="whoami">

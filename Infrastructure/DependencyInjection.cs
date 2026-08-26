@@ -2,6 +2,7 @@
 using Application.ServiceInterfaces;
 using FluentEmail.MailKitSmtp;
 using Hangfire;
+using Infrastructure.Identity;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Infrastructure.Settings;
@@ -45,6 +46,14 @@ namespace Infrastructure.DependencyInjection
             services.AddScoped<IMembersRepository, MembersRepository>();
             services.AddScoped<ILoansRepository, LoansRepository>();
             services.AddScoped<IIdentityService, IdentityService>();
+
+            // Roles and the seed administrator, created once per start (see
+            // IdentitySeeder). Program.cs runs it right after Migrate().
+            services.Configure<AdminAccountSettings>(
+                configuration.GetSection("Identity:Admin"));
+
+            services.AddScoped<IdentitySeeder>();
+
             services.AddScoped<IEmailService, EmailService>();
 
             // Singletons: ClaudeService owns one AnthropicClient (and with it
