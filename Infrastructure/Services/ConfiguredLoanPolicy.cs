@@ -9,6 +9,7 @@ namespace Infrastructure.Services
         private const int FallbackPeriodDays = 14;
 
         public int LoanPeriodDays { get; }
+
         public ConfiguredLoanPolicy(IOptions<LoanSettings> settings)
         {
             var configured = settings.Value.LoanPeriodDays;
