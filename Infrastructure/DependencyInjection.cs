@@ -1,5 +1,6 @@
 ﻿using Application.RepositoryInterfaces;
 using Application.ServiceInterfaces;
+using ErrorOr;
 using FluentEmail.MailKitSmtp;
 using Hangfire;
 using Infrastructure.Identity;
@@ -19,15 +20,21 @@ namespace Infrastructure.DependencyInjection
     public static class DependencyInjection
     {
 
-        public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+        // Returns ErrorOr rather than IServiceCollection: a misconfigured app
+        // is a real, expected outcome, and the caller decides what to do about
+        // it. Nothing chained off the old return value anyway. Program.cs
+        // reports the error and stops before building the host.
+        public static ErrorOr<Success> AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
         {
-            // No connection string is committed any more. Fail here, loudly and
-            // early, rather than somewhere deep inside EF at first query.
+            // No connection string is committed any more. Report it here,
+            // early, rather than failing somewhere deep inside EF at first
+            // query.
             var connectionString = configuration.GetConnectionString("DefaultConnection");
 
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                throw new InvalidOperationException(
+                return Error.Failure(
+                    "Infrastructure.MissingConnectionString",
                     "No connection string configured. Set it as the user secret " +
                     "\"ConnectionStrings:DefaultConnection\" for local work, or as " +
                     "the environment variable ConnectionStrings__DefaultConnection " +
@@ -103,19 +110,31 @@ namespace Infrastructure.DependencyInjection
 
             var emailSection = configuration.GetSection("Email");
 
+            // int.Parse here threw a FormatException — or a
+            // NullReferenceException through the ! — on a missing or misspelt
+            // port, from inside DI registration, where the stack trace says
+            // nothing about which setting was wrong.
+            if (!int.TryParse(emailSection["Smtp:Port"], out var smtpPort))
+            {
+                return Error.Failure(
+                    "Infrastructure.InvalidSmtpPort",
+                    $"Email:Smtp:Port must be a number. It is currently " +
+                    $"\"{emailSection["Smtp:Port"]}\".");
+            }
+
             services
                 .AddFluentEmail(emailSection["From"])
                 .AddMailKitSender(new SmtpClientOptions
                 {
                     Server = emailSection["Smtp:Server"],
-                    Port = int.Parse(emailSection["Smtp:Port"]!),
+                    Port = smtpPort,
                     UseSsl = true,
                     RequiresAuthentication = true,
                     User = emailSection["User"],
                     Password = emailSection["Password"]
                 });
 
-            return services;
+            return Result.Success;
         }
 
     }

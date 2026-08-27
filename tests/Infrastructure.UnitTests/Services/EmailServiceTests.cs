@@ -1,3 +1,4 @@
+using ErrorOr;
 using FluentEmail.Core;
 using FluentEmail.Core.Models;
 using Infrastructure.Services;
@@ -34,32 +35,52 @@ public class EmailServiceTests
     private EmailService CreateSut() => new(_email.Object);
 
     [Fact]
-    public async Task Completes_quietly_when_the_send_succeeds()
+    public async Task Reports_success_when_the_send_succeeds()
     {
         GivenSendReturns(new SendResponse());
 
-        await CreateSut().SendWelcomeEmailAsync("ada@example.com", "ada");
+        var result = await CreateSut().SendWelcomeEmailAsync("ada@example.com", "ada");
 
+        Assert.False(result.IsError);
         _email.Verify(e => e.SendAsync(It.IsAny<CancellationToken?>()), Times.Once);
     }
 
     // FluentEmail reports SMTP failures on the response instead of throwing.
-    // Before this behavior existed, a failed send was recorded as a *succeeded*
-    // Hangfire job and never retried, so this is the test that keeps the
-    // swallow from coming back.
+    // Before this check existed, a failed send was indistinguishable from a
+    // successful one — which is how a lost email was recorded as a *succeeded*
+    // Hangfire job. This service now returns the failure rather than throwing
+    // it; turning that into a retry is SendWelcomeEmailJob's job, and
+    // SendWelcomeEmailJobTests covers that half.
     [Fact]
-    public async Task Throws_when_the_send_fails_so_hangfire_can_retry()
+    public async Task Returns_an_error_when_the_send_fails()
     {
         GivenSendReturns(new SendResponse
         {
             ErrorMessages = { "target machine actively refused it" }
         });
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => CreateSut().SendWelcomeEmailAsync("ada@example.com", "ada"));
+        var result = await CreateSut().SendWelcomeEmailAsync("ada@example.com", "ada");
 
-        Assert.Contains("ada@example.com", ex.Message);
-        Assert.Contains("target machine actively refused it", ex.Message);
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Failure, result.FirstError.Type);
+        Assert.Equal("Email.SendFailed", result.FirstError.Code);
+        Assert.Contains("ada@example.com", result.FirstError.Description);
+        Assert.Contains("target machine actively refused it", result.FirstError.Description);
+    }
+
+    // The promise is "this does not throw", so an exception escaping the
+    // third-party builder has to become an error too, not a 500.
+    [Fact]
+    public async Task Returns_an_error_when_the_underlying_sender_throws()
+    {
+        _email.Setup(e => e.SendAsync(It.IsAny<CancellationToken?>()))
+              .ThrowsAsync(new InvalidOperationException("socket exploded"));
+
+        var result = await CreateSut().SendWelcomeEmailAsync("ada@example.com", "ada");
+
+        Assert.True(result.IsError);
+        Assert.Equal("Email.SendFailed", result.FirstError.Code);
+        Assert.Contains("socket exploded", result.FirstError.Description);
     }
 
     [Fact]
@@ -67,7 +88,7 @@ public class EmailServiceTests
     {
         GivenSendReturns(new SendResponse());
 
-        await CreateSut().SendWelcomeEmailAsync("ada@example.com", "ada");
+        _ = await CreateSut().SendWelcomeEmailAsync("ada@example.com", "ada");
 
         _email.Verify(e => e.To("ada@example.com"), Times.Once);
     }

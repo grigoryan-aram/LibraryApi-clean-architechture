@@ -67,7 +67,25 @@ builder.Services.AddRateLimiter(options =>
 
 
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+
+// AddInfrastructure reports a misconfiguration instead of throwing one, so
+// stopping is this file's job. There is no host and no ILogger yet, hence
+// stderr; and it happens before Build(), so nothing has opened a database
+// connection or started a Hangfire worker by the time we quit.
+var infrastructure = builder.Services.AddInfrastructure(builder.Configuration);
+
+if (infrastructure.IsError)
+{
+    foreach (var error in infrastructure.Errors)
+    {
+        Console.Error.WriteLine($"Cannot start: [{error.Code}] {error.Description}");
+    }
+
+    // Non-zero, so a process manager or CI step sees a failed start rather
+    // than a clean exit.
+    Environment.ExitCode = 1;
+    return;
+}
 
 
 // Identity defaults to /Account/Login, which does not exist here — a browser

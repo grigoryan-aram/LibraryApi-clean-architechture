@@ -56,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (76 tests across three projects, all passing):
+Test (80 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -184,7 +184,8 @@ The registration → welcome-email path **is wired** and runs through Hangfire:
 Two things to know before touching it:
 
 - `SendWelcomeEmailJob` **must stay registered** in `Application/DependencyInjection.cs`. Hangfire.AspNetCore's activator resolves job classes with `GetRequiredService`, so an unregistered job type throws at execution time — visible only as a failed job in `/hangfire`, never at the API call.
-- `EmailService` checks `response.Successful` and throws on failure **on purpose**. FluentEmail swallows SMTP exceptions and reports them on the response, so without that check a failed send is recorded as a *succeeded* Hangfire job and never retried. Do not "simplify" it back to a bare `await ... .SendAsync()`.
+- `EmailService` checks `response.Successful` **on purpose** and returns `Error.Failure("Email.SendFailed", …)`. FluentEmail swallows SMTP exceptions and reports them on the response, so without that check a failed send is recorded as a *succeeded* Hangfire job and never retried. Do not "simplify" it back to a bare `await ... .SendAsync()`.
+- **`SendWelcomeEmailJob` is the one place that throws on purpose**, and it is not control flow — it is the only vocabulary Hangfire has. Hangfire decides a job's fate by whether the method threw: a job that *returns* is recorded as **Succeeded**, and a returned `ErrorOr` is still a return. So `IEmailService` returns `ErrorOr<Success>` and the job translates a failure into the signal the scheduler understands. Measured: a failed send lands in **Scheduled** state with the error description as the retry reason (`Retry attempt 2 of 10: Failed to send welcome email to …`) — note that a first failure appears in the *retry* list, not the failed list.
 
 `RegisterCommandHandler` and `EmailService` both have unit tests covering exactly these two behaviors — see `tests/`.
 
@@ -237,6 +238,13 @@ Two details worth keeping:
 Being in-memory, the allowance resets on restart and is per-instance. Fine for one small deployment; move it to the database if it ever has to be authoritative.
 
 ## Error handling
+
+**Never hand-throw an exception.** Failure is modelled with the result pattern via `ErrorOr`: return `ErrorOr<T>` and a specific `Error` (`Loans.BookNotFound`, not a bare failure) rather than throwing. A thrown exception bypasses `ValidationBehavior<,>`, the handler's error contract and `ToProblem`, and lands in `GlobalExceptionMiddleware` as an opaque 500 — the wrong answer for anything the caller could correct. When a third-party library throws (the Anthropic SDK, FluentEmail), catch at that boundary and map to an `Error`, the way `ClaudeService` maps the SDK exception chain to `Claude.*` codes.
+
+Two deliberate consequences of that rule:
+
+- **`AddInfrastructure` returns `ErrorOr<Success>`, not `IServiceCollection`.** A missing connection string or a non-numeric `Email:Smtp:Port` is reported, not thrown; `Program.cs` prints `Cannot start: [code] description`, sets exit code 1 and returns **before** `builder.Build()`, so nothing has opened a database connection or started a Hangfire worker. Nothing chained off the old return value.
+- **`SendWelcomeEmailJob` is the single exception**, for the Hangfire reason described under **Background jobs and email**.
 
 `GlobalExceptionMiddleware` (in `LibraryApi/MiddleWares/ExceptionHandlingMiddleWare.cs` — class name and file name differ, and the class sits in the global namespace) logs and returns a generic 500 `ProblemDetails`. It is registered after the Hangfire dashboard and rate limiter, so it does not cover those.
 
