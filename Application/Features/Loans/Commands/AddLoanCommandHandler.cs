@@ -68,10 +68,9 @@ namespace Application.Features.Loans.Commands
             var result = await _loansRepository.AddLoanAsync(loan, cancellationToken);
 
             if (result == null)
-            {
 
                 return Error.Failure("Loans.NotCreated", "Could not add the loan.");
-            }
+
 
 
 

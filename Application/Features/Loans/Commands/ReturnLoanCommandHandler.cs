@@ -32,7 +32,7 @@ namespace Application.Features.Loans.Commands
             // Returning a book twice would move ReturnedAt forward and quietly
             // rewrite when the book actually came back. Refuse instead, and
             // say when it was returned so the caller can see why.
-            if (loan.ReturnedAt is not null)
+            if (loan.ReturnedAt != null)
             {
                 return Error.Conflict(
                     "Loans.AlreadyReturned",
