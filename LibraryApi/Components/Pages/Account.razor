@@ -72,14 +72,14 @@
 
                         <label class="field">
                             <span>Username</span>
-                            <InputText @bind-Value="LoginModel.Username" autocomplete="username" />
-                            <ValidationMessage For="() => LoginModel.Username" />
+                            <InputText @bind-Value="LoginModel!.Username" autocomplete="username" />
+                            <ValidationMessage For="() => LoginModel!.Username" />
                         </label>
 
                         <label class="field">
                             <span>Password</span>
-                            <InputText type="password" @bind-Value="LoginModel.Password" autocomplete="current-password" />
-                            <ValidationMessage For="() => LoginModel.Password" />
+                            <InputText type="password" @bind-Value="LoginModel!.Password" autocomplete="current-password" />
+                            <ValidationMessage For="() => LoginModel!.Password" />
                         </label>
 
                         <button class="btn btn-primary btn-block" type="submit">Sign in</button>
@@ -110,20 +110,20 @@
 
                         <label class="field">
                             <span>Username</span>
-                            <InputText @bind-Value="RegisterModel.Username" autocomplete="username" />
-                            <ValidationMessage For="() => RegisterModel.Username" />
+                            <InputText @bind-Value="RegisterModel!.Username" autocomplete="username" />
+                            <ValidationMessage For="() => RegisterModel!.Username" />
                         </label>
 
                         <label class="field">
                             <span>Email</span>
-                            <InputText @bind-Value="RegisterModel.Email" autocomplete="email" />
-                            <ValidationMessage For="() => RegisterModel.Email" />
+                            <InputText @bind-Value="RegisterModel!.Email" autocomplete="email" />
+                            <ValidationMessage For="() => RegisterModel!.Email" />
                         </label>
 
                         <label class="field">
                             <span>Password</span>
-                            <InputText type="password" @bind-Value="RegisterModel.Password" autocomplete="new-password" />
-                            <ValidationMessage For="() => RegisterModel.Password" />
+                            <InputText type="password" @bind-Value="RegisterModel!.Password" autocomplete="new-password" />
+                            <ValidationMessage For="() => RegisterModel!.Password" />
                         </label>
 
                         <button class="btn btn-ghost btn-block" type="submit">Register</button>
@@ -142,11 +142,24 @@
 </section>
 
 @code {
+    // Nullable, with no property initializer, and filled in OnInitialized
+    // instead — the shape BL0008 asks for. On a form post the framework
+    // assigns these from the posted fields, and an initializer here is not a
+    // fallback: the assignment happens afterwards and can put null straight
+    // over it. Only the form actually being submitted is bound, so the OTHER
+    // model on this page is the one that would arrive null.
     [SupplyParameterFromForm(FormName = "login")]
-    private LoginInput LoginModel { get; set; } = new();
+    private LoginInput? LoginModel { get; set; }
 
     [SupplyParameterFromForm(FormName = "register")]
-    private RegisterInput RegisterModel { get; set; } = new();
+    private RegisterInput? RegisterModel { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // ??= not =, so a bound model survives: this runs after binding.
+        LoginModel ??= new LoginInput();
+        RegisterModel ??= new RegisterInput();
+    }
 
     private string? _loginError;
     private string? _registerSuccess;
@@ -155,8 +168,8 @@
     private async Task SignInAsync()
     {
         var result = await SignInManager.PasswordSignInAsync(
-            LoginModel.Username,
-            LoginModel.Password,
+            LoginModel!.Username,
+            LoginModel!.Password,
             isPersistent: false,
             lockoutOnFailure: false);
 
@@ -175,9 +188,9 @@
         _registerSuccess = null;
 
         var result = await Mediator.Send(new RegisterCommand(
-            RegisterModel.Username,
-            RegisterModel.Password,
-            RegisterModel.Email));
+            RegisterModel!.Username,
+            RegisterModel!.Password,
+            RegisterModel!.Email));
 
         if (result.IsError)
         {
