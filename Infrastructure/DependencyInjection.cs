@@ -57,6 +57,10 @@ namespace Infrastructure.DependencyInjection
             services.AddScoped<IEmailService, EmailService>();
 
             // The loan period. Stateless, so a singleton is enough.
+            //
+            // AddLoanCommandHandler takes ILoanPolicy, and Development
+            // validates the container at startup — so removing these two lines
+            // does not fail the build, it stops the app booting at all.
             services.Configure<LoanSettings>(configuration.GetSection("Loans"));
             services.AddSingleton<ILoanPolicy, ConfiguredLoanPolicy>();
 

@@ -8,6 +8,7 @@ namespace Infrastructure.Services
     {
         private const int FallbackPeriodDays = 14;
 
+        public int LoanPeriodDays { get; }
         public ConfiguredLoanPolicy(IOptions<LoanSettings> settings)
         {
             var configured = settings.Value.LoanPeriodDays;
@@ -18,7 +19,7 @@ namespace Infrastructure.Services
             LoanPeriodDays = configured > 0 ? configured : FallbackPeriodDays;
         }
 
-        public int LoanPeriodDays { get; }
+
 
         public DateTime DueDateFor(DateTime borrowedAt) =>
             borrowedAt.AddDays(LoanPeriodDays);
