@@ -915,6 +915,7 @@ a {
 
 .stat-ok { color: var(--ok); }
 .stat-warn { color: var(--brass); }
+.stat-late { color: var(--danger); }
 
 .stat-label {
     font-family: var(--mono);

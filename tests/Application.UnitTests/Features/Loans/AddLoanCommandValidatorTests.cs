@@ -6,37 +6,15 @@ public class AddLoanCommandValidatorTests
 {
     private readonly AddLoanCommandValidator _validator = new();
 
-    private static AddLoanCommand Loan(DateTime? returnedAt) =>
-        new(BookId: 1, MemberId: 2, BorrowedAt: DateTime.UtcNow.AddDays(-1), ReturnedAt: returnedAt);
-
-    // The whole point of a loan endpoint: hand a book out now, with no return
-    // date. The validator used to require ReturnedAt, which made an open loan
-    // impossible to create and the endpoint useless.
+    // The command carries nothing but the two ids now. The dates it used to
+    // accept from the caller — BorrowedAt and ReturnedAt — are the server's
+    // business, so the tests that guarded them are gone with them.
     [Fact]
-    public void Accepts_an_open_loan_with_no_return_date()
+    public void Accepts_a_book_and_a_member()
     {
-        var result = _validator.Validate(Loan(returnedAt: null));
+        var result = _validator.Validate(new AddLoanCommand(BookId: 1, MemberId: 2));
 
         Assert.True(result.IsValid);
-    }
-
-    [Fact]
-    public void Accepts_a_closed_loan_returned_after_it_was_borrowed()
-    {
-        var result = _validator.Validate(Loan(returnedAt: DateTime.UtcNow));
-
-        Assert.True(result.IsValid);
-    }
-
-    [Fact]
-    public void Rejects_a_return_date_before_the_borrow_date()
-    {
-        var result = _validator.Validate(Loan(returnedAt: DateTime.UtcNow.AddDays(-5)));
-
-        Assert.False(result.IsValid);
-        Assert.Contains(
-            result.Errors,
-            e => e.PropertyName == nameof(AddLoanCommand.ReturnedAt));
     }
 
     [Theory]
@@ -44,8 +22,7 @@ public class AddLoanCommandValidatorTests
     [InlineData(-3)]
     public void Rejects_a_missing_book(int bookId)
     {
-        var result = _validator.Validate(
-            new AddLoanCommand(bookId, 2, DateTime.UtcNow, null));
+        var result = _validator.Validate(new AddLoanCommand(bookId, 2));
 
         Assert.False(result.IsValid);
         Assert.Contains(
@@ -53,15 +30,16 @@ public class AddLoanCommandValidatorTests
             e => e.PropertyName == nameof(AddLoanCommand.BookId));
     }
 
-    [Fact]
-    public void Rejects_a_borrow_date_in_the_future()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-3)]
+    public void Rejects_a_missing_member(int memberId)
     {
-        var result = _validator.Validate(
-            new AddLoanCommand(1, 2, DateTime.UtcNow.AddDays(1), null));
+        var result = _validator.Validate(new AddLoanCommand(1, memberId));
 
         Assert.False(result.IsValid);
         Assert.Contains(
             result.Errors,
-            e => e.PropertyName == nameof(AddLoanCommand.BorrowedAt));
+            e => e.PropertyName == nameof(AddLoanCommand.MemberId));
     }
 }

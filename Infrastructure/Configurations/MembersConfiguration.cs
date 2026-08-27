@@ -1,4 +1,4 @@
-﻿using LibraryApi.Domain.Entities;
+using LibraryApi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -6,39 +6,21 @@ namespace LibraryApi.Infrastructure.Configurations
 {
     public class MembersConfiguration : IEntityTypeConfiguration<MemberModel>
     {
-
-        private static MemberModel Member(
-            int id,
-            string name
-            )
-        {
-            return new MemberModel
-            {
-                Id = id,
-                Name = name,
-
-            };
-        }
-
-
-
-
         public void Configure(EntityTypeBuilder<MemberModel> builder)
         {
-
-            Member(1, "Aram");
-            Member(2, "Artur");
-            Member(3, "Narek");
-            Member(4, "Arshak");
-            Member(5, "Arno");
-            Member(6, "Hovsep");
-            Member(7, "Tigran");
-            Member(8, "Hayk");
-            Member(9, "Poxos");
-            Member(10, "Petros");
-
-
-
+            // No HasData here, deliberately.
+            //
+            // This class used to build ten MemberModel objects and throw every
+            // one of them away — the return values were never passed to
+            // HasData, so nothing was ever seeded and no migration ever
+            // inserted a member. Simply adding the HasData call now would be
+            // worse than the bug: databases in use already hold member rows at
+            // ids 1..n, and seed rows are inserted by primary key, so the
+            // migration would fail with a duplicate-key violation on startup —
+            // and Program.cs runs Migrate() before the app serves anything.
+            //
+            // Members are people who joined a library, not demo data. They are
+            // created through POST /api/Members or the /members page.
         }
     }
 }

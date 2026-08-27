@@ -56,6 +56,10 @@ namespace Infrastructure.DependencyInjection
 
             services.AddScoped<IEmailService, EmailService>();
 
+            // The loan period. Stateless, so a singleton is enough.
+            services.Configure<LoanSettings>(configuration.GetSection("Loans"));
+            services.AddSingleton<ILoanPolicy, ConfiguredLoanPolicy>();
+
             // Singletons: ClaudeService owns one AnthropicClient (and with it
             // one HttpClient) for the lifetime of the app, and the chat history
             // store is only as long-lived as the IMemoryCache behind it.

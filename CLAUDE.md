@@ -56,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (58 tests across three projects, all passing):
+Test (76 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -105,6 +105,27 @@ Application/Features/Books/Commands/AddBookCommandValidator.cs // AbstractValida
 
 DTOs are `record`s in `Application/DTOs/` (`BooksDTO`, `LoansDTO`, …). Handlers and validators are auto-discovered by assembly scanning in `Application/DependencyInjection.cs` — no manual registration. New repositories/services **do** need a line in `Infrastructure/DependencyInjection.cs`.
 
+## Lending
+
+The loan slice is the one place in this codebase with real domain rules, so it does not look quite like the CRUD slices around it.
+
+`POST /api/Loans` takes **`{ bookId, memberId }`** and nothing else. `BorrowedAt` and `DueAt` are stamped by `AddLoanCommandHandler` from the server clock — a caller who can choose their own borrow date can choose their own due date with it. The handler checks both ids against `IBooksRepository`/`IMembersRepository` first: without that, an unknown id reached SQL Server and came back as a foreign-key violation, which `GlobalExceptionMiddleware` turned into a **500** for what is plainly a bad request. It is now `Loans.BookNotFound` / `Loans.MemberNotFound`.
+
+`POST /api/Loans/{id}/return` (`ReturnLoanCommand`) is the only way a loan record changes. It refuses a second return with `Loans.AlreadyReturned` rather than moving `ReturnedAt` forward and quietly rewriting when the book came back. There is deliberately no general `UpdateLoanCommand`: an endpoint that could rewrite `BorrowedAt` or `DueAt` would be an endpoint for corrupting the record. Note `DELETE /api/Loans/{id}` still exists and is *not* returning a book — it erases the fact that the loan happened.
+
+`GET /api/Loans/overdue` (`GetOverdueLoansQuery`) filters in SQL (`ReturnedAt IS NULL AND DueAt < @asOf`) rather than pulling every loan back and sifting it in memory, and returns an **empty list** rather than `NotFound` — nothing overdue is a good answer, not a missing one.
+
+The loan period is **`Loans:LoanPeriodDays`, default 14**, reached through `ILoanPolicy` (`Application/ServiceInterfaces/`) with `ConfiguredLoanPolicy` behind it. The interface exists because the handler lives in Application and configuration is an Infrastructure concern — the same shape as `IAiUsageLimiter`. A configured period of 0 or less is treated as a typo and falls back to 14, because honouring it would make every loan overdue the instant it was created.
+
+Things that will bite:
+
+- **`DueAt` is stored, not computed on read.** Changing `LoanPeriodDays` affects only loans handed out afterwards; it cannot retroactively make yesterday's loans overdue. The `AddLoanDueDate` migration backfills existing rows with `BorrowedAt + 14 days` — the column default of `0001-01-01` would otherwise have made every loan already on the books permanently overdue. Rows whose `BorrowedAt` is itself `0001-01-01` are left alone: they predate the fix that stopped `AddLoanAsync` dropping the borrow date, and there is no honest due date to infer for them.
+- **`IsOverdue`, `IsReturned` and `DaysOverdue` are computed getters on `LoansDTO`,** not columns and not mapped by Mapster (it fills constructor parameters and leaves get-only members alone). Both the API and `Loans.razor` read them, so the page and `/overdue` cannot disagree.
+- **`DaysOverdue` rounds DOWN.** A book three days and one millisecond late is three days overdue; rounding up called it four. The cost is that anything late by less than a day reports `0`, so read it together with `IsOverdue` — never on its own. `Loans.razor` has a branch for exactly that case and shows a bare "overdue" badge.
+- **`BookModel.IsBorrowed` is still dead.** Nothing maintains it and no handler checks it, so **the same book can be lent to several members at once** — verified, not theoretical. The availability rule was considered and deliberately left out; until it exists, the "out/available" counts on the Books page are decorative.
+- **Timestamps come back from the database with no `DateTimeKind`.** The values are UTC, and every server-side comparison is therefore correct, but `POST` echoes `…Z` while `GET` returns the same instant without it. A client that parses the unsuffixed form as local time will compute overdue wrongly. Storing `DateTimeOffset`, or stamping `DateTimeKind.Utc` on read, is the fix.
+- **`AddMemberCommand` takes a client-supplied `id` and its validator requires it be greater than 0,** so creating a member means choosing your own primary key. Members are also not seeded (see `MembersConfiguration`, which explains why a `HasData` block there would break startup on any database that already holds members). A fresh database therefore has no members, and lending needs one.
+
 ## Data access
 
 Repository-per-aggregate. Interfaces in `Application/RepositoryInterfaces/`, EF Core implementations in `Infrastructure/Repositories/`. Conventions in the existing repos: reads use `AsNoTracking()`, deletes use `ExecuteDeleteAsync()` (no load-then-remove, so deleting a missing id is a silent no-op), every method takes a `CancellationToken`.
@@ -132,8 +153,18 @@ Two roles, named once in `Domain/Constants/Roles.cs`: **`Admin`** and **`User`**
 
 Both gates ask `AdminAccess.IsAdmin` (`LibraryApi/Extensions/AdminAccess.cs`) so they cannot drift apart:
 
-- **Hangfire** — `HangfireDashboardAuthorization` returns false for anyone without the role. Hangfire's dashboard has no notion of a redirect, so that is a flat 401 for anonymous and non-admin alike.
-- **Swagger** — `AdminOnlyPathMiddleWare` (`LibraryApi/MiddleWares/`) gates the `/swagger` prefix, mapped in `Program.cs` immediately before `UseSwagger()`. Swagger is served by middleware, not an endpoint, so there is no route to hang `[Authorize(Roles = "Admin")]` on; gating the path is the only way. It **challenges** an anonymous caller (the cookie handler turns that into a redirect to `/account` for a browser, a 401 for anything else) and **forbids** a signed-in non-admin, because signing in again would change nothing. The prefix match also covers `/swagger/v1/swagger.json` — gating only the UI page would leave the document readable.
+- **Hangfire** — `HangfireDashboardAuthorization` returns false for anyone without the role. Hangfire's dashboard has no notion of a redirect: anonymous gets **401**, a signed-in non-admin gets **403** (both measured).
+- **Swagger** — `AdminOnlyPathMiddleWare` (`LibraryApi/MiddleWares/`) gates the `/swagger` prefix, mapped in `Program.cs` immediately before `UseSwagger()`. Swagger is served by middleware, not an endpoint, so there is no route to hang `[Authorize(Roles = "Admin")]` on; gating the path is the only way. It **challenges** an anonymous caller and **forbids** a signed-in non-admin, because signing in again would change nothing. The prefix match also covers `/swagger/v1/swagger.json` — gating only the UI page would leave the document readable.
+
+What that actually looks like on the wire is **302 to `/account` in both cases**, which is worth knowing before you go hunting for a bug:
+
+| caller | `/swagger/*` | `/hangfire` | an `[Authorize]` API route |
+|---|---|---|---|
+| anonymous | 302 → `/account?ReturnUrl=…` | 401 | 401 (with a `Location` header) |
+| signed in, no `Admin` | 302 → `/account?ReturnUrl=…` | 403 | 200 |
+| signed in, `Admin` | 200 | 200 | 200 |
+
+Two things drive that and neither is a defect: `ConfigureApplicationCookie` points **both** `LoginPath` and `AccessDeniedPath` at `/account`, so a challenge and a forbid land on the same URL; and the cookie handler only downgrades a redirect to a 401 for requests carrying `X-Requested-With: XMLHttpRequest` — an `Accept: application/json` header does **not** do it. The API routes answer 401 rather than redirecting because they are matched endpoints with API metadata, while `/swagger` is middleware with no endpoint at all. A signed-in non-admin being redirected to `/account` — a page that will tell them they are already signed in — is a genuine dead end; a dedicated access-denied page would be the fix.
 
 Two things that will look like bugs and are not:
 

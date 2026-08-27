@@ -1,4 +1,4 @@
-﻿using LibraryApi.Domain.Entities;
+using LibraryApi.Domain.Entities;
 
 namespace Application.RepositoryInterfaces
 {
@@ -12,8 +12,18 @@ namespace Application.RepositoryInterfaces
         // all take the entity.
         Task<LoanModel> AddLoanAsync(LoanModel loan, CancellationToken cancellationToken);
 
+        // Writes back a loan that was read with GetLoanByIdAsync — which
+        // returns it untracked, so the implementation has to attach it.
+        Task<LoanModel> UpdateLoanAsync(LoanModel loan, CancellationToken cancellationToken);
+
         Task DeleteLoanAsync(int Id, CancellationToken cancellationToken);
         Task<LoanModel?> GetLoanByIdAsync(int id, CancellationToken cancellationToken);
+
+        // Open loans past their due date. Takes the cutoff instead of reading
+        // the clock itself, so the query is deterministic and testable.
+        Task<IReadOnlyList<LoanModel>> GetOverdueLoansAsync(
+            DateTime asOf,
+            CancellationToken cancellationToken);
 
     }
 }

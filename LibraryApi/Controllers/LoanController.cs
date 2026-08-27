@@ -31,6 +31,18 @@ public class LoansController : ControllerBase
             errors => this.ToProblem(errors));
     }
 
+    // Before {id}, or "overdue" is swallowed by the id route and comes back as
+    // a model-binding failure.
+    [HttpGet("overdue")]
+    public async Task<IActionResult> GetOverdueLoans()
+    {
+        var result = await _mediator.Send(new GetOverdueLoansQuery());
+
+        return result.Match(
+            loans => Ok(loans),
+            errors => this.ToProblem(errors));
+    }
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetLoanById(int id)
     {
@@ -45,6 +57,19 @@ public class LoansController : ControllerBase
     public async Task<IActionResult> AddLoan(AddLoanCommand command)
     {
         var result = await _mediator.Send(command);
+
+        return result.Match(
+            loan => Ok(loan),
+            errors => this.ToProblem(errors));
+    }
+
+    // POST rather than PUT: this is not an arbitrary update of the loan, it is
+    // one named action on it, and the server supplies the only value that
+    // changes.
+    [HttpPost("{id}/return")]
+    public async Task<IActionResult> ReturnLoan(int id)
+    {
+        var result = await _mediator.Send(new ReturnLoanCommand(id));
 
         return result.Match(
             loan => Ok(loan),

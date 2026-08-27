@@ -24,11 +24,15 @@
                 <span class="stat-label">total</span>
             </div>
             <div class="stat">
-                <span class="stat-num stat-warn">@_loans.Count(l => l.ReturnedAt is null)</span>
+                <span class="stat-num stat-warn">@_loans.Count(l => !l.IsReturned)</span>
                 <span class="stat-label">out now</span>
             </div>
             <div class="stat">
-                <span class="stat-num stat-ok">@_loans.Count(l => l.ReturnedAt is not null)</span>
+                <span class="stat-num stat-late">@_loans.Count(l => l.IsOverdue)</span>
+                <span class="stat-label">overdue</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num stat-ok">@_loans.Count(l => l.IsReturned)</span>
                 <span class="stat-label">returned</span>
             </div>
         </div>
@@ -85,6 +89,7 @@
                         <th>Book</th>
                         <th>Member</th>
                         <th>Borrowed</th>
+                        <th>Due</th>
                         <th>Returned</th>
                         <th>Status</th>
                         <th class="right">—</th>
@@ -97,21 +102,37 @@
                             <td class="strong">@BookTitle(loan.BookId)</td>
                             <td>@MemberName(loan.MemberId)</td>
                             <td class="mono">@loan.BorrowedAt.ToString("yyyy-MM-dd")</td>
+                            <td class="mono">@loan.DueAt.ToString("yyyy-MM-dd")</td>
                             <td class="mono">@(loan.ReturnedAt?.ToString("yyyy-MM-dd") ?? "—")</td>
                             <td>
-                                @if (loan.ReturnedAt is null)
+                                @* IsOverdue and DaysOverdue are computed on LoansDTO, so this
+                                   page and GET /api/Loans/overdue can never disagree. *@
+                                @if (loan.IsOverdue)
                                 {
-                                    var days = (int)(DateTime.UtcNow - loan.BorrowedAt).TotalDays;
-                                    <span class="badge @(days > 30 ? "badge-late" : "badge-warn")">
-                                        @(days > 30 ? $"{days} days out" : "out")
+                                    <span class="badge badge-late">
+                                        @* DaysOverdue floors, so a book late by hours reads 0. *@
+                                        @(loan.DaysOverdue == 0
+                                            ? "overdue"
+                                            : $"{loan.DaysOverdue} {(loan.DaysOverdue == 1 ? "day" : "days")} overdue")
                                     </span>
+                                }
+                                else if (!loan.IsReturned)
+                                {
+                                    <span class="badge badge-warn">out</span>
                                 }
                                 else
                                 {
-                                    <span class="badge badge-ok">closed</span>
+                                    <span class="badge badge-ok">returned</span>
                                 }
                             </td>
                             <td class="right">
+                                @if (!loan.IsReturned)
+                                {
+                                    <button class="btn btn-ghost btn-sm" title="Mark this book returned"
+                                            disabled="@_busy" @onclick="() => ReturnAsync(loan)">
+                                        Return
+                                    </button>
+                                }
                                 <button class="btn-icon" title="Delete this loan record"
                                         disabled="@_busy" @onclick="() => DeleteAsync(loan)">
                                     ✕
@@ -124,9 +145,10 @@
         </div>
 
         <p class="fineprint muted">
-            There is no update endpoint for a loan, so a book cannot be marked
-            returned from here — only lent or the record deleted. Adding
-            <code>UpdateLoanCommand</code> would close that gap.
+            <strong>Return</strong> sends <code>ReturnLoanCommand</code>, the same thing
+            <code>POST /api/Loans/{id}/return</code> does — the server stamps the date.
+            <strong>✕</strong> deletes the record outright, which is not the same as
+            returning a book and leaves no trace that the loan happened.
         </p>
     }
 
@@ -178,11 +200,11 @@
         _busy = true;
         _error = null;
 
+        // No dates: the handler stamps BorrowedAt and works DueAt out from the
+        // configured loan period.
         var result = await Mediator.Send(new AddLoanCommand(
             _newBookId,
-            _newMemberId,
-            DateTime.UtcNow,
-            null));
+            _newMemberId));
 
         if (result.IsError)
         {
@@ -192,6 +214,25 @@
         {
             _newBookId = 0;
             _newMemberId = 0;
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+
+    private async Task ReturnAsync(LoansDTO loan)
+    {
+        _busy = true;
+        _error = null;
+
+        var result = await Mediator.Send(new ReturnLoanCommand(loan.Id));
+
+        if (result.IsError)
+        {
+            _error = result.FirstError.Description;
+        }
+        else
+        {
             await LoadAsync();
         }
 
