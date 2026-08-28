@@ -61,6 +61,7 @@ namespace Infrastructure.DependencyInjection
 
             services.AddScoped<IdentitySeeder>();
 
+
             services.AddScoped<IEmailService, EmailService>();
 
             // The loan period. Stateless, so a singleton is enough.
