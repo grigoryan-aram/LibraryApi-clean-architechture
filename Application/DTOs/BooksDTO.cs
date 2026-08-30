@@ -1,6 +1,6 @@
 namespace Application.DTOs
 {
-
+    //test
     // Id is what lets a client act on a book it just listed - delete it, or
     // put it on loan. Without it the list is read-only trivia. Mapster fills
     // it by name from BookModel.Id.
