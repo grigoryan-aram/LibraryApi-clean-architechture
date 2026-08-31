@@ -131,6 +131,7 @@ a {
 
 .nav {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     margin-right: auto;
 }
@@ -1191,5 +1192,143 @@ a {
 
     .toolbar-count {
         margin-left: 0;
+    }
+}
+
+/* ---------- phones ---------- */
+
+@media (max-width: 640px) {
+    .shell {
+        padding: 0 16px;
+    }
+
+    .topbar {
+        gap: 10px 12px;
+        padding: 12px 0;
+    }
+
+    .whoami {
+        margin-left: auto;
+    }
+
+    /* Nav becomes a full-width strip that scrolls on its own instead of
+       wrapping to three rows and eating the screen. */
+    .nav {
+        order: 3;
+        flex: 1 0 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        margin: 0 -16px;
+        padding: 2px 16px 4px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-link {
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+    }
+
+    .btn {
+        min-height: 44px;
+    }
+
+    .btn-sm {
+        min-height: 36px;
+    }
+
+    /* 16px stops iOS zooming the page in on focus. */
+    .search, .select, .field-inline input, .field-inline select, .field input {
+        font-size: 16px;
+        min-height: 44px;
+        width: 100%;
+    }
+
+    .composer-input {
+        font-size: 16px;
+    }
+
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        width: 100%;
+    }
+
+    .stat {
+        min-width: 0;
+    }
+
+    .card {
+        padding: 16px;
+    }
+
+    /* Tables restack as one card per row: a seven-column loans table in a
+       375px scroller is unreadable. Labels come from data-label on each cell. */
+    .table-wrap {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        overflow-x: visible;
+    }
+
+    .table, .table tbody, .table tr, .table td {
+        display: block;
+        width: 100%;
+    }
+
+    .table thead {
+        display: none;
+    }
+
+    .table tr {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--ink-2);
+        margin-bottom: 10px;
+        padding: 4px 0;
+    }
+
+    .table tbody tr:hover {
+        background: var(--ink-2);
+    }
+
+    .table td {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 8px 14px;
+        border-bottom: 0;
+        text-align: right;
+    }
+
+    .table td[data-label]::before {
+        content: attr(data-label);
+        flex: 0 0 auto;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--muted);
+        text-align: left;
+    }
+
+    .table td.right {
+        justify-content: flex-end;
+        gap: 8px;
+        border-top: 1px solid rgb(38 43 56 / 55%);
+        margin-top: 4px;
+        padding-top: 10px;
+    }
+
+    .footer {
+        font-size: 11.5px;
     }
 }
