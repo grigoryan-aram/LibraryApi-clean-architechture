@@ -89,6 +89,7 @@ namespace Infrastructure.Services
 
             return new RegisteredUserDTO(
 
+             user.Id,
              user.UserName!,
              user.Email!);
         }

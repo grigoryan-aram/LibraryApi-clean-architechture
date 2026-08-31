@@ -4,6 +4,7 @@ using LibraryApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 
 
@@ -37,6 +38,18 @@ public class LoansController : ControllerBase
     public async Task<IActionResult> GetOverdueLoans()
     {
         var result = await _mediator.Send(new GetOverdueLoansQuery());
+
+        return result.Match(
+            loans => Ok(loans),
+            errors => this.ToProblem(errors));
+    }
+
+    [HttpGet("mine")]
+    public async Task<IActionResult> GetMyLoans()
+    {
+        var identityUserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+        var result = await _mediator.Send(new GetMyLoansQuery(identityUserId));
 
         return result.Match(
             loans => Ok(loans),

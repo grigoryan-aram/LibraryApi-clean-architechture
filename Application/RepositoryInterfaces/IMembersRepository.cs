@@ -1,4 +1,4 @@
-﻿using LibraryApi.Domain.Entities;
+using LibraryApi.Domain.Entities;
 
 namespace LibraryApi.Application.RepositoryInterfaces
 {
@@ -6,10 +6,13 @@ namespace LibraryApi.Application.RepositoryInterfaces
     {
         Task<IReadOnlyList<MemberModel>> GetMembersAsync(CancellationToken cancellationToken);
         Task<MemberModel> AddMemberAsync(MemberModel member, CancellationToken cancellationToken);
+        Task<MemberModel> UpdateMemberAsync(MemberModel member, CancellationToken cancellationToken);
         Task DeleteMemberAsync(int id, CancellationToken cancellationToken);
         Task<MemberModel?> GetMemberByIdAsync(int id, CancellationToken cancellationToken);
 
-
+        Task<MemberModel?> GetMemberByIdentityUserIdAsync(
+            string identityUserId,
+            CancellationToken cancellationToken);
 
     }
 }

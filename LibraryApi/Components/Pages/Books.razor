@@ -23,11 +23,11 @@
                 <span class="stat-label">total</span>
             </div>
             <div class="stat">
-                <span class="stat-num stat-warn">@_books.Count(b => b.IsBorrowed)</span>
-                <span class="stat-label">on loan</span>
+                <span class="stat-num stat-warn">@_books.Sum(b => b.CopiesOnLoan)</span>
+                <span class="stat-label">copies out</span>
             </div>
             <div class="stat">
-                <span class="stat-num stat-ok">@_books.Count(b => !b.IsBorrowed)</span>
+                <span class="stat-num stat-ok">@_books.Sum(b => b.AvailableCopies)</span>
                 <span class="stat-label">available</span>
             </div>
             <div class="stat">
@@ -86,6 +86,10 @@
                     }
                 </select>
             </label>
+            <label class="field-inline">
+                <span>Copies</span>
+                <input type="number" min="1" @bind="_newCopies" />
+            </label>
             <button class="btn btn-primary" type="submit" disabled="@_busy">Add</button>
         </form>
     }
@@ -118,17 +122,21 @@
                     @foreach (var book in Filtered)
                     {
                         <tr>
-                            <td class="strong">@book.Title</td>
-                            <td>@book.Author</td>
-                            <td><span class="tag">@CategoryName(book.CategoryId)</span></td>
-                            <td>
-                                @if (book.IsBorrowed)
+                            <td class="strong" data-label="Title">@book.Title</td>
+                            <td data-label="Author">@book.Author</td>
+                            <td data-label="Shelf"><span class="tag">@CategoryName(book.CategoryId)</span></td>
+                            <td data-label="Status">
+                                @if (book.IsAvailable)
                                 {
-                                    <span class="badge badge-warn">on loan</span>
+                                    <span class="badge badge-ok">
+                                        @book.AvailableCopies of @book.TotalCopies available
+                                    </span>
                                 }
                                 else
                                 {
-                                    <span class="badge badge-ok">available</span>
+                                    <span class="badge badge-warn">
+                                        all @book.TotalCopies out
+                                    </span>
                                 }
                             </td>
                             <td class="right">
@@ -162,10 +170,12 @@
     private string _newAuthor = string.Empty;
     private int _newCategoryId;
 
+    private int _newCopies = 1;
+
     private IEnumerable<BooksDTO> Filtered =>
         _books
             .Where(b => _categoryFilter == 0 || b.CategoryId == _categoryFilter)
-            .Where(b => !_availableOnly || !b.IsBorrowed)
+            .Where(b => !_availableOnly || b.IsAvailable)
             .Where(b => string.IsNullOrWhiteSpace(_search)
                         || b.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
                         || b.Author.Contains(_search, StringComparison.OrdinalIgnoreCase))
@@ -218,7 +228,7 @@
             _newTitle.Trim(),
             _newAuthor.Trim(),
             _newCategoryId,
-            false));
+            _newCopies));
 
         if (result.IsError)
         {
@@ -228,6 +238,7 @@
         {
             _newTitle = string.Empty;
             _newAuthor = string.Empty;
+            _newCopies = 1;
             _showAdd = false;
             await LoadAsync();
         }

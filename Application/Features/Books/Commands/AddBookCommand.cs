@@ -1,4 +1,4 @@
-﻿using Application.DTOs;
+using Application.DTOs;
 using ErrorOr;
 using MediatR;
 
@@ -8,7 +8,7 @@ namespace Application.Features.Books.Commands
             string Title,
             string Author,
             int CategoryId,
-            bool isBorrowed) :
+            int TotalCopies) :
             IRequest<ErrorOr<BooksDTO>>;
 
 

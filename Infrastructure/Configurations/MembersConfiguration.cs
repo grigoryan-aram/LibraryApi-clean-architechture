@@ -8,6 +8,10 @@ namespace LibraryApi.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<MemberModel> builder)
         {
+            builder.HasIndex(member => member.IdentityUserId)
+                .IsUnique()
+                .HasFilter("[IdentityUserId] IS NOT NULL");
+
             // No HasData here, deliberately.
             //
             // This class used to build ten MemberModel objects and throw every
@@ -20,7 +24,6 @@ namespace LibraryApi.Infrastructure.Configurations
             // and Program.cs runs Migrate() before the app serves anything.
             //
             // Members are people who joined a library, not demo data. They are
-            // created through POST /api/Members or the /members page.
         }
     }
 }

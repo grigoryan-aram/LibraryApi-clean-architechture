@@ -50,6 +50,16 @@ public class MembersController : ControllerBase
             errors => this.ToProblem(errors));
     }
 
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateMember(int id, UpdateMemberCommand command)
+    {
+        var result = await _mediator.Send(command with { Id = id });
+
+        return result.Match(
+            member => Ok(member),
+            errors => this.ToProblem(errors));
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteMember(int id)
     {

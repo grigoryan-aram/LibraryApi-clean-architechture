@@ -25,6 +25,17 @@ namespace Infrastructure.Repositories
             return member;
         }
 
+        public async Task<MemberModel> UpdateMemberAsync(
+            MemberModel member,
+            CancellationToken cancellationToken)
+        {
+            _context.Members.Update(member);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return member;
+        }
+
         public async Task DeleteMemberAsync(
           int id,
           CancellationToken cancellationToken)
@@ -51,6 +62,22 @@ namespace Infrastructure.Repositories
             return await _context.Members
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
+        }
+
+        public async Task<MemberModel?> GetMemberByIdentityUserIdAsync(
+            string identityUserId,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(identityUserId))
+            {
+                return null;
+            }
+
+            return await _context.Members
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    m => m.IdentityUserId == identityUserId,
+                    cancellationToken);
         }
     }
 }
