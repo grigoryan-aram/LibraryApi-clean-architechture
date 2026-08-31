@@ -1,4 +1,4 @@
-﻿using LibraryApi.Domain.Entities;
+using LibraryApi.Domain.Entities;
 
 namespace Application.RepositoryInterfaces
 {
@@ -6,6 +6,7 @@ namespace Application.RepositoryInterfaces
     {
         Task<IReadOnlyList<CategoryModel>> GetAllCategoriesAsync(CancellationToken cancellationToken);
         Task<CategoryModel> AddCategoryAsync(CategoryModel category, CancellationToken cancellationToken);
+        Task<CategoryModel> UpdateCategoryAsync(CategoryModel category, CancellationToken cancellationToken);
         Task DeleteCategoryAsync(int id, CancellationToken cancellationToken);
         Task<CategoryModel?> GetCategoryByIdAsync(int id, CancellationToken cancellationToken);
 

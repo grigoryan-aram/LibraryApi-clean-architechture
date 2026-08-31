@@ -25,5 +25,16 @@ namespace Application.RepositoryInterfaces
             DateTime asOf,
             CancellationToken cancellationToken);
 
+        Task<IReadOnlyList<LoanModel>> GetLoansForMemberAsync(
+            int memberId,
+            CancellationToken cancellationToken);
+
+        Task<int> CountActiveLoansForBookAsync(
+            int bookId,
+            CancellationToken cancellationToken);
+
+        Task<IReadOnlyDictionary<int, int>> CountActiveLoansByBookAsync(
+            CancellationToken cancellationToken);
+
     }
 }

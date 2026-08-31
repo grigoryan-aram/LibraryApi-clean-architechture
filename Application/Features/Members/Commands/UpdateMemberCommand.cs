@@ -4,8 +4,8 @@ using MediatR;
 
 namespace Application.Features.Members.Commands
 {
-    public record AddMemberCommand(
+    public record UpdateMemberCommand(
+        int Id,
         string Name) : IRequest<ErrorOr<MembersDTO>>;
-
 
 }

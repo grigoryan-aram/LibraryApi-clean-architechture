@@ -1,4 +1,4 @@
-﻿using Application.DTOs;
+using Application.DTOs;
 using Application.RepositoryInterfaces;
 using ErrorOr;
 using LibraryApi.Domain.Entities;
@@ -11,10 +11,14 @@ namespace Application.Features.Books.Commands
     public class AddBookCommandHandler : IRequestHandler<AddBookCommand, ErrorOr<BooksDTO>>
     {
         private readonly IBooksRepository _booksRepository;
+        private readonly ICategorysRepository _categorysRepository;
 
-        public AddBookCommandHandler(IBooksRepository booksRepository)
+        public AddBookCommandHandler(
+            IBooksRepository booksRepository,
+            ICategorysRepository categorysRepository)
         {
             _booksRepository = booksRepository;
+            _categorysRepository = categorysRepository;
         }
 
 
@@ -23,6 +27,17 @@ namespace Application.Features.Books.Commands
         AddBookCommand request,
         CancellationToken cancellationToken)
         {
+            var category = await _categorysRepository.GetCategoryByIdAsync(
+                request.CategoryId,
+                cancellationToken);
+
+            if (category is null)
+            {
+                return Error.NotFound(
+                    "Books.CategoryNotFound",
+                    $"No category with id {request.CategoryId}.");
+            }
+
             var book = await _booksRepository.AddAsync(
                 request.Adapt<BookModel>(),
                 cancellationToken);
@@ -38,4 +53,3 @@ namespace Application.Features.Books.Commands
         }
     }
 }
-

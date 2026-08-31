@@ -29,6 +29,17 @@ namespace Infrastructure.Repositories
         }
 
 
+        public async Task<CategoryModel> UpdateCategoryAsync(
+            CategoryModel category,
+            CancellationToken cancellationToken)
+        {
+            _context.Categories.Update(category);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return category;
+        }
+
         public async Task DeleteCategoryAsync(
            int id,
            CancellationToken cancellationToken)

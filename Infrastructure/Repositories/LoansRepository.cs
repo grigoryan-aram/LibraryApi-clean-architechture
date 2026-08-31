@@ -70,5 +70,40 @@ namespace Infrastructure.Repositories
                  cancellationToken);
 
         }
+
+        public async Task<IReadOnlyList<LoanModel>> GetLoansForMemberAsync(
+            int memberId,
+            CancellationToken cancellationToken)
+        {
+            return await _context.Loans
+                .AsNoTracking()
+                .Where(l => l.MemberId == memberId)
+                .OrderByDescending(l => l.BorrowedAt)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<int> CountActiveLoansForBookAsync(
+            int bookId,
+            CancellationToken cancellationToken)
+        {
+            return await _context.Loans
+                .AsNoTracking()
+                .CountAsync(
+                    l => l.BookId == bookId && l.ReturnedAt == null,
+                    cancellationToken);
+        }
+
+        public async Task<IReadOnlyDictionary<int, int>> CountActiveLoansByBookAsync(
+            CancellationToken cancellationToken)
+        {
+            var counts = await _context.Loans
+                .AsNoTracking()
+                .Where(l => l.ReturnedAt == null)
+                .GroupBy(l => l.BookId)
+                .Select(group => new { BookId = group.Key, Count = group.Count() })
+                .ToListAsync(cancellationToken);
+
+            return counts.ToDictionary(x => x.BookId, x => x.Count);
+        }
     }
 }

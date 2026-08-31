@@ -1,4 +1,4 @@
-﻿using Application.DTOs;
+using Application.DTOs;
 using Application.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
@@ -10,11 +10,15 @@ namespace Application.Features.Books.Queries
     {
 
         private readonly IBooksRepository _booksRepository;
+        private readonly ILoansRepository _loansRepository;
 
 
-        public GetAllBooksQueryHandler(IBooksRepository booksRepository)
+        public GetAllBooksQueryHandler(
+            IBooksRepository booksRepository,
+            ILoansRepository loansRepository)
         {
             _booksRepository = booksRepository;
+            _loansRepository = loansRepository;
         }
 
 
@@ -29,9 +33,16 @@ namespace Application.Features.Books.Queries
                 return Error.NotFound("Books not found");
             }
 
-            var booksDto = books.Adapt<IReadOnlyList<BooksDTO>>();
+            var onLoan = await _loansRepository.CountActiveLoansByBookAsync(cancellationToken);
 
-            return ErrorOrFactory.From(booksDto);
+            var booksDto = books
+                .Select(book => book.Adapt<BooksDTO>() with
+                {
+                    CopiesOnLoan = onLoan.TryGetValue(book.Id, out var count) ? count : 0
+                })
+                .ToList();
+
+            return ErrorOrFactory.From<IReadOnlyList<BooksDTO>>(booksDto);
         }
     }
 }
