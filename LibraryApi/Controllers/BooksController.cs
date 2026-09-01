@@ -14,13 +14,13 @@ namespace LibraryApi.Controllers;
 [Route("api/[controller]")]
 public class BooksController : ControllerBase
 {
-
+    // implement ISender interface to send commands and queries to the mediator
     private readonly IMediator _mediator;
 
 
     public BooksController(IMediator mediator)
     {
-
+       
         _mediator = mediator;
     }
 
