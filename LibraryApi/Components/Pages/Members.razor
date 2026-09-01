@@ -136,8 +136,7 @@
         _busy = true;
         _error = null;
 
-        // Id 0 - the database assigns the real one on insert.
-        var result = await Mediator.Send(new AddMemberCommand(0, _newName.Trim()));
+        var result = await Mediator.Send(new AddMemberCommand(_newName.Trim()));
 
         if (result.IsError)
         {

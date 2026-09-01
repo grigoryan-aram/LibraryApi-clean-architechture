@@ -48,9 +48,11 @@
             <span>Book</span>
             <select @bind="_newBookId">
                 <option value="0">Pick a book…</option>
-                @foreach (var book in _books.Where(b => !b.IsBorrowed).OrderBy(b => b.Title))
+                @foreach (var book in _books.Where(b => b.IsAvailable).OrderBy(b => b.Title))
                 {
-                    <option value="@book.Id">@book.Title</option>
+                    <option value="@book.Id">
+                        @book.Title (@book.AvailableCopies of @book.TotalCopies)
+                    </option>
                 }
             </select>
         </label>
@@ -99,12 +101,12 @@
                     @foreach (var loan in _loans.OrderByDescending(l => l.BorrowedAt))
                     {
                         <tr>
-                            <td class="strong">@BookTitle(loan.BookId)</td>
-                            <td>@MemberName(loan.MemberId)</td>
-                            <td class="mono">@loan.BorrowedAt.ToString("yyyy-MM-dd")</td>
-                            <td class="mono">@loan.DueAt.ToString("yyyy-MM-dd")</td>
-                            <td class="mono">@(loan.ReturnedAt?.ToString("yyyy-MM-dd") ?? "—")</td>
-                            <td>
+                            <td class="strong" data-label="Book">@BookTitle(loan.BookId)</td>
+                            <td data-label="Member">@MemberName(loan.MemberId)</td>
+                            <td class="mono" data-label="Borrowed">@loan.BorrowedAt.ToString("yyyy-MM-dd")</td>
+                            <td class="mono" data-label="Due">@loan.DueAt.ToString("yyyy-MM-dd")</td>
+                            <td class="mono" data-label="Returned">@(loan.ReturnedAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                            <td data-label="Status">
                                 @* IsOverdue and DaysOverdue are computed on LoansDTO, so this
                                    page and GET /api/Loans/overdue can never disagree. *@
                                 @if (loan.IsOverdue)

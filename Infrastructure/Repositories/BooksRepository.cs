@@ -27,6 +27,17 @@ namespace Infrastructure.Repositories
         }
 
 
+        public async Task<BookModel> UpdateAsync(
+            BookModel book,
+            CancellationToken cancellationToken)
+        {
+            _context.Books.Update(book);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return book;
+        }
+
         public async Task DeleteAsync(
             int id,
             CancellationToken cancellationToken)

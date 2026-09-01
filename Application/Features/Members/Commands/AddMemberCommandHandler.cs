@@ -1,4 +1,4 @@
-﻿using Application.DTOs;
+using Application.DTOs;
 using ErrorOr;
 using LibraryApi.Application.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
@@ -19,7 +19,10 @@ namespace Application.Features.Members.Commands
 
         public async Task<ErrorOr<MembersDTO>> Handle(AddMemberCommand request, CancellationToken cancellationToken)
         {
-            var member = request.Adapt<MemberModel>();
+            var member = new MemberModel
+            {
+                Name = request.Name
+            };
 
             var result = await _membersRepository.AddMemberAsync(member, cancellationToken);
 

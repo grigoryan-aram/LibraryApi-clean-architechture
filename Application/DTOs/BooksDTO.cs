@@ -8,6 +8,12 @@ namespace Application.DTOs
         int Id,
         string Title,
         string Author,
-        bool IsBorrowed,
-        int CategoryId);
+        int CategoryId,
+        int TotalCopies,
+        int CopiesOnLoan)
+    {
+        public int AvailableCopies => Math.Max(0, TotalCopies - CopiesOnLoan);
+
+        public bool IsAvailable => AvailableCopies > 0;
+    }
 }

@@ -1,4 +1,4 @@
-﻿
+
 namespace LibraryApi.Domain.Entities;
 
 public class BookModel
@@ -9,7 +9,7 @@ public class BookModel
 
     public string Author { get; set; } = string.Empty;
 
-    public bool IsBorrowed { get; set; }
+    public int TotalCopies { get; set; } = 1;
 
     public int CategoryId { get; set; }
     public CategoryModel? Category { get; set; }

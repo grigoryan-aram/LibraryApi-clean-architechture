@@ -56,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (80 tests across three projects, all passing):
+Test (127 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -78,6 +78,7 @@ Traps that have already cost time here:
 - **Match the exact overload when mocking a fluent builder.** `IFluentEmail` declares `To(string)`, `To(string, string)` and `To(IEnumerable<Address>)`; `EmailService` calls the single-argument one. Setting up a sibling overload leaves the real call returning Moq's default `null`, which surfaces as a `NullReferenceException` from inside the chain rather than as an obvious mock-setup mistake.
 - **`Enqueue<T>` is an extension method,** so Moq cannot see it. Assert Hangfire enqueues through `IBackgroundJobClient.Create(Job, IState)` instead, and check `Job.Args` — that is what catches an argument-order swap.
 - **Prefer asserting the returned result over `Verify`.** Reach for `Verify` when the call itself *is* the behavior (enqueuing a job, sending an email); call-count assertions on anything else break under harmless refactors.
+- **Moq stores arguments by reference and re-runs `It.Is<>` matchers at `Verify` time,** so a stub that mutates what it was handed (the usual "echo it back with an id") makes an assertion about the value *on the way in* read the mutated value. `AddMemberCommandHandlerTests` records the id inside the stub instead. Looks like a handler bug; is not one.
 
 Run the suite before reporting a change done, and report what it actually printed. A test that was never executed is a claim, not a check — and if you fix something that used to swallow a failure, the test proving it now surfaces that failure is the one most worth writing.
 
@@ -105,15 +106,21 @@ Application/Features/Books/Commands/AddBookCommandValidator.cs // AbstractValida
 
 DTOs are `record`s in `Application/DTOs/` (`BooksDTO`, `LoansDTO`, …). Handlers and validators are auto-discovered by assembly scanning in `Application/DependencyInjection.cs` — no manual registration. New repositories/services **do** need a line in `Infrastructure/DependencyInjection.cs`.
 
+Books, categories and members each have **Add / Update / Delete / GetAll / GetById**; loans have no general update (see **Lending**). The `PUT /api/{resource}/{id}` actions take the command from the body and **overwrite its `Id` from the route** with `command with { Id = id }`, so the two cannot disagree. Update handlers load the entity, assign only what the command carries, and write it back — never `Adapt` onto a fresh entity, which would blank the rest.
+
+Every repository read is `AsNoTracking()`, so `UpdateAsync` / `UpdateCategoryAsync` / `UpdateMemberAsync` / `UpdateLoanAsync` must call `Update()` to attach the detached instance. A bare `SaveChangesAsync` saves nothing.
+
 ## Lending
 
 The loan slice is the one place in this codebase with real domain rules, so it does not look quite like the CRUD slices around it.
 
-`POST /api/Loans` takes **`{ bookId, memberId }`** and nothing else. `BorrowedAt` and `DueAt` are stamped by `AddLoanCommandHandler` from the server clock — a caller who can choose their own borrow date can choose their own due date with it. The handler checks both ids against `IBooksRepository`/`IMembersRepository` first: without that, an unknown id reached SQL Server and came back as a foreign-key violation, which `GlobalExceptionMiddleware` turned into a **500** for what is plainly a bad request. It is now `Loans.BookNotFound` / `Loans.MemberNotFound`.
+`POST /api/Loans` takes **`{ bookId, memberId }`** and nothing else. `BorrowedAt` and `DueAt` are stamped by `AddLoanCommandHandler` from the server clock — a caller who can choose their own borrow date can choose their own due date with it. The handler checks both ids against `IBooksRepository`/`IMembersRepository` first: without that, an unknown id reached SQL Server and came back as a foreign-key violation, which `GlobalExceptionMiddleware` turned into a **500** for what is plainly a bad request. It is now `Loans.BookNotFound` / `Loans.MemberNotFound`. `AddBookCommandHandler` and `UpdateBookCommandHandler` check `CategoryId` the same way, for the same reason, and answer `Books.CategoryNotFound`.
 
 `POST /api/Loans/{id}/return` (`ReturnLoanCommand`) is the only way a loan record changes. It refuses a second return with `Loans.AlreadyReturned` rather than moving `ReturnedAt` forward and quietly rewriting when the book came back. There is deliberately no general `UpdateLoanCommand`: an endpoint that could rewrite `BorrowedAt` or `DueAt` would be an endpoint for corrupting the record. Note `DELETE /api/Loans/{id}` still exists and is *not* returning a book — it erases the fact that the loan happened.
 
 `GET /api/Loans/overdue` (`GetOverdueLoansQuery`) filters in SQL (`ReturnedAt IS NULL AND DueAt < @asOf`) rather than pulling every loan back and sifting it in memory, and returns an **empty list** rather than `NotFound` — nothing overdue is a good answer, not a missing one.
+
+`GET /api/Loans/mine` (`GetMyLoansQuery`) returns the caller's own loans. **`IdentityUserId` is never model-bound** — `LoansController` reads `ClaimTypes.NameIdentifier` off the auth cookie, same as `AskClaudeQuery.Requester`; from the query string it would read a stranger's history. It is the Identity user id, **not** `User.Identity.Name`. Mapped **before** `{id}`, like `overdue`. An account with no member row gets `Loans.NoMemberForAccount`, not an empty list.
 
 The loan period is **`Loans:LoanPeriodDays`, default 14**, reached through `ILoanPolicy` (`Application/ServiceInterfaces/`) with `ConfiguredLoanPolicy` behind it. The interface exists because the handler lives in Application and configuration is an Infrastructure concern — the same shape as `IAiUsageLimiter`. A configured period of 0 or less is treated as a typo and falls back to 14, because honouring it would make every loan overdue the instant it was created.
 
@@ -122,15 +129,25 @@ Things that will bite:
 - **`DueAt` is stored, not computed on read.** Changing `LoanPeriodDays` affects only loans handed out afterwards; it cannot retroactively make yesterday's loans overdue. The `AddLoanDueDate` migration backfills existing rows with `BorrowedAt + 14 days` — the column default of `0001-01-01` would otherwise have made every loan already on the books permanently overdue. Rows whose `BorrowedAt` is itself `0001-01-01` are left alone: they predate the fix that stopped `AddLoanAsync` dropping the borrow date, and there is no honest due date to infer for them.
 - **`IsOverdue`, `IsReturned` and `DaysOverdue` are computed getters on `LoansDTO`,** not columns and not mapped by Mapster (it fills constructor parameters and leaves get-only members alone). Both the API and `Loans.razor` read them, so the page and `/overdue` cannot disagree.
 - **`DaysOverdue` rounds DOWN.** A book three days and one millisecond late is three days overdue; rounding up called it four. The cost is that anything late by less than a day reports `0`, so read it together with `IsOverdue` — never on its own. `Loans.razor` has a branch for exactly that case and shows a bare "overdue" badge.
-- **`BookModel.IsBorrowed` is still dead.** Nothing maintains it and no handler checks it, so **the same book can be lent to several members at once** — verified, not theoretical. The availability rule was considered and deliberately left out; until it exists, the "out/available" counts on the Books page are decorative.
+- **Availability is `TotalCopies` minus the open loans, counted in SQL — never a stored flag.** `BookModel.IsBorrowed` was a dead boolean nothing maintained, which is why one book could go out to several members. `AddLoanCommandHandler` now refuses with `Loans.NoCopiesAvailable`. `CK_Books_TotalCopies_Positive` enforces `>= 1`.
+
+- **Two counting methods, on purpose:** `CountActiveLoansForBookAsync` for the lending path and `GetBookByIdQuery`; `CountActiveLoansByBookAsync` (one `GROUP BY`) for `GetAllBooksQuery`, or listing the catalogue would be N+1. Books with nothing out are **absent** from that dictionary, so a missing key means 0.
+
+- **`CopiesOnLoan` is not mapped** — it has no counterpart on `BookModel`, so Mapster leaves it 0 and each read handler supplies it with `with { CopiesOnLoan = n }`. Forget it and the response claims every copy is free. `AvailableCopies` and `IsAvailable` are computed getters; `AvailableCopies` clamps at 0.
+
+- **`UpdateBookCommand` refuses to cut `TotalCopies` below what is on loan** (`Books.CopiesBelowActiveLoans`), or the clamp above would swallow the shortfall.
+
+- **Two callers can still race past the availability check** — the count and the insert are separate statements with no lock between them. Not prevented; fixing it needs a transaction with the right isolation level, or a row per copy.
 - **Timestamps come back from the database with no `DateTimeKind`.** The values are UTC, and every server-side comparison is therefore correct, but `POST` echoes `…Z` while `GET` returns the same instant without it. A client that parses the unsuffixed form as local time will compute overdue wrongly. Storing `DateTimeOffset`, or stamping `DateTimeKind.Utc` on read, is the fix.
-- **`AddMemberCommand` takes a client-supplied `id` and its validator requires it be greater than 0,** so creating a member means choosing your own primary key. Members are also not seeded (see `MembersConfiguration`, which explains why a `HasData` block there would break startup on any database that already holds members). A fresh database therefore has no members, and lending needs one.
+- **`AddMemberCommand` takes only a name.** It used to require a client-supplied `id` greater than 0, so creating a member meant choosing your own primary key; the identity column assigns it now, and the handler builds the entity by hand rather than adapting the command precisely so `Id` stays 0. Members are still not seeded (see `MembersConfiguration`, which explains why a `HasData` block there would break startup on any database that already holds members) — but **registration now creates one**, so a fresh database gets its first member as soon as somebody signs up.
 
 ## Data access
 
 Repository-per-aggregate. Interfaces in `Application/RepositoryInterfaces/`, EF Core implementations in `Infrastructure/Repositories/`. Conventions in the existing repos: reads use `AsNoTracking()`, deletes use `ExecuteDeleteAsync()` (no load-then-remove, so deleting a missing id is a silent no-op), every method takes a `CancellationToken`.
 
-`LibraryDBContext` (`Infrastructure/Data/LibraryDBContext.cs`) extends `IdentityDbContext<IdentityUser>`, declares relationships inline in `OnModelCreating`, then calls `ApplyConfigurationsFromAssembly`. The `IEntityTypeConfiguration` classes in `Infrastructure/Configurations/` exist purely to hold `HasData` seed rows (15 books, plus categories, members, loans).
+`LibraryDBContext` (`Infrastructure/Data/LibraryDBContext.cs`) extends `IdentityDbContext<IdentityUser>`, declares relationships inline in `OnModelCreating`, then calls `ApplyConfigurationsFromAssembly`. The `IEntityTypeConfiguration` classes in `Infrastructure/Configurations/` mostly hold `HasData` seed rows (15 books — three of them with more than one copy, so availability is something other than a rephrased boolean out of the box — plus categories); `MembersConfiguration` holds no seed at all and exists for the unique index, and `BooksConfiguration` also carries the `TotalCopies >= 1` check constraint.
+
+**A non-nullable column added by a migration needs its backfill written by hand.** EF scaffolds `defaultValue: 0`; `AddCopiesAndMemberAccounts` had to be edited to `1`, or every book added through the API (outside the seed, so `UpdateData` misses it) would be unlendable *and* the check constraint later in the same migration would fail inside `Database.Migrate()`. `AddLoanDueDate` is the same lesson about `DueAt`.
 
 **Migrations are applied automatically at startup** by `dbContext.Database.Migrate()` at the bottom of `LibraryApi/Program.cs`, so a new migration takes effect on the next run.
 
@@ -141,6 +158,18 @@ ASP.NET Core Identity with `IdentityUser`/`IdentityRole` and **cookie** auth (`A
 `[Authorize]` sits at class level on the Books, Category, Loan, and Members controllers; `AuthController` is anonymous.
 
 `AuthController.Login` calls `SignInManager.PasswordSignInAsync` directly, bypassing MediatR. The parallel `Application/Features/Login/` slice and `IIdentityService.LoginAsync` implement the same thing and are currently unreferenced — if you touch login, pick one path rather than editing both.
+
+### Members and accounts
+
+An Identity account and a library member are separate, joined by **`MemberModel.IdentityUserId`** with a **filtered unique index** (`WHERE [IdentityUserId] IS NOT NULL`). Nullable both ways: walk-ins added via `POST /api/Members` have no account, and accounts predating the column have no member. Filtered because null is the normal case — a plain unique index would allow only one walk-in.
+
+**`RegisterCommandHandler` creates the pair**, which is what makes `/api/Loans/mine` answerable. `RegisteredUserDTO` carries `UserId` only for that; `AuthController` never serialises the DTO, so it stays off the wire. Three things:
+
+- It is **idempotent** — it looks the member up by `IdentityUserId` first, because the unique index would reject a second row.
+- **Failures are logged, not returned.** The account exists by then, so an error would tell the caller registration failed on a username they now own. The welcome email must still be queued when the member insert fails — there is a test for it.
+- The member is named after the **username**, not the email.
+
+**`UpdateMemberCommand` cannot touch `IdentityUserId`.** It loads the entity, sets only `Name`, and writes it back, so a rename cannot silently unlink an account and orphan that person's loan history.
 
 ### Roles
 

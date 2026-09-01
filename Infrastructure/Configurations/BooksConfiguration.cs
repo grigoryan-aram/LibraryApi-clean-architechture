@@ -1,4 +1,4 @@
-﻿
+
 using LibraryApi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -13,7 +13,7 @@ namespace LibraryApi.Infrastructure.Configurations
        string title,
        string author,
        int categoryId,
-       bool isBorrowed = false)
+       int totalCopies = 1)
         {
             return new BookModel
             {
@@ -21,18 +21,21 @@ namespace LibraryApi.Infrastructure.Configurations
                 Title = title,
                 Author = author,
                 CategoryId = categoryId,
-                IsBorrowed = isBorrowed
+                TotalCopies = totalCopies
             };
         }
         public void Configure(EntityTypeBuilder<BookModel> builder)
         {
+            builder.ToTable(table => table.HasCheckConstraint(
+                "CK_Books_TotalCopies_Positive",
+                "[TotalCopies] >= 1"));
 
             builder.HasData
                 (
-              Book(1, "Clean Code", "Robert C. Martin", 1),
-              Book(2, "The Pragmatic Programmer", "Andrew Hunt", 1),
+              Book(1, "Clean Code", "Robert C. Martin", 1, totalCopies: 3),
+              Book(2, "The Pragmatic Programmer", "Andrew Hunt", 1, totalCopies: 2),
               Book(3, "Design Patterns", "Erich Gamma", 1),
-              Book(4, "The Hobbit", "J.R.R. Tolkien", 2),
+              Book(4, "The Hobbit", "J.R.R. Tolkien", 2, totalCopies: 2),
               Book(5, "Harry Potter and the Sorcerer's Stone", "J.K. Rowling", 2),
               Book(6, "1984", "George Orwell", 3),
               Book(7, "To Kill a Mockingbird", "Harper Lee", 3),
@@ -48,5 +51,3 @@ namespace LibraryApi.Infrastructure.Configurations
         }
     }
 }
-
-

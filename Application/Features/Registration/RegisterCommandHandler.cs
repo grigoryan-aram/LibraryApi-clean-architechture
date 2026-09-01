@@ -1,9 +1,11 @@
-﻿using Application.DTOs;
+using Application.DTOs;
 using Application.Features.Registration;
 using Application.Jobs;
 using Application.ServiceInterfaces;
 using ErrorOr;
 using Hangfire;
+using LibraryApi.Application.RepositoryInterfaces;
+using LibraryApi.Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -11,15 +13,18 @@ public class RegisterCommandHandler
     : IRequestHandler<RegisterCommand, ErrorOr<RegisteredUserDTO>>
 {
     private readonly IIdentityService _identityService;
+    private readonly IMembersRepository _membersRepository;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly ILogger<RegisterCommandHandler> _logger;
 
     public RegisterCommandHandler(
         IIdentityService identityService,
-         IBackgroundJobClient backgroundJobClient,
-         ILogger<RegisterCommandHandler> logger)
+        IMembersRepository membersRepository,
+        IBackgroundJobClient backgroundJobClient,
+        ILogger<RegisterCommandHandler> logger)
     {
         _identityService = identityService;
+        _membersRepository = membersRepository;
         _backgroundJobClient = backgroundJobClient;
         _logger = logger;
     }
@@ -38,6 +43,8 @@ public class RegisterCommandHandler
         {
             return user.Errors;
         }
+
+        await LinkMemberAsync(user.Value, cancellationToken);
 
         // The account already exists at this point. If Hangfire cannot take the
         // job — its schema missing on a fresh database, the SQL user lacking
@@ -58,5 +65,37 @@ public class RegisterCommandHandler
         }
 
         return user.Value;
+    }
+
+    private async Task LinkMemberAsync(
+        RegisteredUserDTO user,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var existing = await _membersRepository.GetMemberByIdentityUserIdAsync(
+                user.UserId,
+                cancellationToken);
+
+            if (existing is not null)
+            {
+                return;
+            }
+
+            await _membersRepository.AddMemberAsync(
+                new MemberModel
+                {
+                    Name = user.Username,
+                    IdentityUserId = user.UserId
+                },
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Registered {Username} but could not create their library member.",
+                user.Username);
+        }
     }
 }

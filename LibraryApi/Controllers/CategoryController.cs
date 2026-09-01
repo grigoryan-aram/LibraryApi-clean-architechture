@@ -50,6 +50,16 @@ public class CategoriesController : ControllerBase
             errors => this.ToProblem(errors));
     }
 
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateCategory(int id, UpdateCategoryCommand command)
+    {
+        var result = await _mediator.Send(command with { Id = id });
+
+        return result.Match(
+            category => Ok(category),
+            errors => this.ToProblem(errors));
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCategory(int id)
     {

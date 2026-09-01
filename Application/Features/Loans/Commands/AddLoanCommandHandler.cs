@@ -54,6 +54,19 @@ namespace Application.Features.Loans.Commands
                     $"No member with id {request.MemberId}.");
             }
 
+            var copiesOnLoan = await _loansRepository.CountActiveLoansForBookAsync(
+                request.BookId,
+                cancellationToken);
+
+            if (copiesOnLoan >= book.TotalCopies)
+            {
+                return Error.Conflict(
+                    "Loans.NoCopiesAvailable",
+                    book.TotalCopies == 1
+                        ? $"The only copy of \"{book.Title}\" is on loan."
+                        : $"All {book.TotalCopies} copies of \"{book.Title}\" are on loan.");
+            }
+
             var borrowedAt = DateTime.UtcNow;
 
             var loan = new LoanModel

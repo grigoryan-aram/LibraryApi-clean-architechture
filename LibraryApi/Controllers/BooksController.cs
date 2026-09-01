@@ -57,6 +57,16 @@ public class BooksController : ControllerBase
                errors => this.ToProblem(errors));
     }
 
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateBook(int id, UpdateBookCommand command)
+    {
+        var result = await _mediator.Send(command with { Id = id });
+
+        return result.Match(
+               book => Ok(book),
+               errors => this.ToProblem(errors));
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteBook(int id)
     {

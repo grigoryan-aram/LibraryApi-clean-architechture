@@ -29,9 +29,13 @@ public class AddLoanCommandHandlerTests
     private AddLoanCommandHandler CreateSut() =>
         new(_loans.Object, _books.Object, _members.Object, new FixedLoanPolicy());
 
-    private void GivenBookExists(int id = 1) =>
+    private void GivenBookExists(int id = 1, int totalCopies = 1) =>
         _books.Setup(repo => repo.GetByIdAsync(id, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(new BookModel { Id = id, Title = "Dune" });
+              .ReturnsAsync(new BookModel { Id = id, Title = "Dune", TotalCopies = totalCopies });
+
+    private void GivenCopiesOnLoan(int count, int bookId = 1) =>
+        _loans.Setup(repo => repo.CountActiveLoansForBookAsync(bookId, It.IsAny<CancellationToken>()))
+              .ReturnsAsync(count);
 
     private void GivenMemberExists(int id = 2) =>
         _members.Setup(repo => repo.GetMemberByIdAsync(id, It.IsAny<CancellationToken>()))
@@ -117,5 +121,90 @@ public class AddLoanCommandHandlerTests
         _loans.Verify(repo => repo.AddLoanAsync(
             It.Is<LoanModel>(loan => loan.BookId == 1 && loan.MemberId == 2),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Refuses_a_book_whose_every_copy_is_already_out()
+    {
+        GivenBookExists(totalCopies: 1);
+        GivenMemberExists();
+        GivenCopiesOnLoan(1);
+
+        var result = await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Conflict, result.FirstError.Type);
+        Assert.Equal("Loans.NoCopiesAvailable", result.FirstError.Code);
+        _loans.Verify(repo => repo.AddLoanAsync(
+            It.IsAny<LoanModel>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(1, "The only copy of \"Dune\" is on loan.")]
+    [InlineData(4, "All 4 copies of \"Dune\" are on loan.")]
+    public async Task Explains_the_refusal_in_the_right_number(
+        int totalCopies,
+        string expected)
+    {
+        GivenBookExists(totalCopies: totalCopies);
+        GivenMemberExists();
+        GivenCopiesOnLoan(totalCopies);
+
+        var result = await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.Equal(expected, result.FirstError.Description);
+    }
+
+    [Fact]
+    public async Task Lends_the_last_free_copy_of_a_book_with_several()
+    {
+        GivenBookExists(totalCopies: 3);
+        GivenMemberExists();
+        GivenCopiesOnLoan(2);
+        GivenTheLoanIsSaved();
+
+        var result = await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.False(result.IsError);
+        Assert.Equal(99, result.Value.Id);
+    }
+
+    [Fact]
+    public async Task Refuses_the_copy_after_the_last_one_of_a_book_with_several()
+    {
+        GivenBookExists(totalCopies: 3);
+        GivenMemberExists();
+        GivenCopiesOnLoan(3);
+
+        var result = await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.True(result.IsError);
+        Assert.Equal("Loans.NoCopiesAvailable", result.FirstError.Code);
+    }
+
+    [Fact]
+    public async Task Refuses_when_more_copies_are_out_than_the_library_owns()
+    {
+        GivenBookExists(totalCopies: 2);
+        GivenMemberExists();
+        GivenCopiesOnLoan(5);
+
+        var result = await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.True(result.IsError);
+        Assert.Equal("Loans.NoCopiesAvailable", result.FirstError.Code);
+    }
+
+    [Fact]
+    public async Task Does_not_count_copies_for_a_book_that_does_not_exist()
+    {
+        GivenMemberExists();
+        _books.Setup(repo => repo.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+              .ReturnsAsync((BookModel?)null);
+
+        await CreateSut().Handle(Command, CancellationToken.None);
+
+        _loans.Verify(repo => repo.CountActiveLoansForBookAsync(
+            It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }
