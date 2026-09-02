@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace LibraryApi.Domain.Constants;
 
 /// <summary>
@@ -19,6 +21,9 @@ public static class Roles
     /// chat page and the browsable pages; not enough for the two dashboards.
     /// </summary>
     public const string User = "User";
+
+    //
+    public const string Guest = "Guest";
 
     public static readonly IReadOnlyList<string> All = [Admin, User];
 }
