@@ -1,5 +1,6 @@
 using Infrastructure.Settings;
 using LibraryApi.Domain.Constants;
+using Mapster;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -84,12 +85,14 @@ namespace Infrastructure.Identity
 
             if (user is null)
             {
-                user = new IdentityUser
-                {
-                    UserName = _admin.UserName,
-                    Email = _admin.Email,
-                    EmailConfirmed = true
-                };
+                // UserName and Email map by name from AdminAccountSettings. Password is
+                // deliberately not mapped — IdentityUser has no Password member, and the
+                // value goes through the hasher in CreateAsync below rather than onto
+                // the entity. EmailConfirmed cannot come from the map at all, since the
+                // settings type has no such property, so it is set afterwards: the seed
+                // administrator is trusted by definition and has no address to confirm.
+                user = _admin.Adapt<IdentityUser>();
+                user.EmailConfirmed = true;
 
                 var created = await _userManager.CreateAsync(user, _admin.Password);
 

@@ -27,10 +27,25 @@ public class UpdateBookCommandValidatorTests
     }
 
     [Theory]
+    [InlineData(1)]
+    [InlineData(100)]
+    public void Accepts_a_copy_count_inside_one_to_a_hundred(int copies)
+    {
+        var result = _validator.Validate(Valid with { TotalCopies = copies });
+
+        Assert.True(result.IsValid);
+    }
+
+    // The bound here must match AddBookCommandValidator. When Update allowed 1000 while
+    // Add allowed 100, the lower cap was bypassable: create a book at 100 copies, then
+    // PUT it to 500. 1000 is kept as an explicit case because it was the old limit and
+    // is the value that would silently start passing again if the two drift apart.
+    [Theory]
     [InlineData(0)]
     [InlineData(-3)]
-    [InlineData(1001)]
-    public void Rejects_a_copy_count_outside_one_to_a_thousand(int copies)
+    [InlineData(101)]
+    [InlineData(1000)]
+    public void Rejects_a_copy_count_outside_one_to_a_hundred(int copies)
     {
         var result = _validator.Validate(Valid with { TotalCopies = copies });
 

@@ -14,21 +14,19 @@ namespace LibraryApi.Controllers;
 [Route("api/[controller]")]
 public class BooksController : ControllerBase
 {
+    private readonly ISender _sender;
 
-    private readonly IMediator _mediator;
 
-
-    public BooksController(IMediator mediator)
+    public BooksController(ISender sender)
     {
-
-        _mediator = mediator;
+        _sender = sender;
     }
 
 
     [HttpGet]
     public async Task<IActionResult> GetBooks()
     {
-        var result = await _mediator.Send(new GetAllBooksQuery());
+        var result = await _sender.Send(new GetAllBooksQuery());
 
         return result.Match(
             books => Ok(books),
@@ -38,7 +36,7 @@ public class BooksController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetBookById(int id)
     {
-        var result = await _mediator.Send(new GetBookByIdQuery(id));
+        var result = await _sender.Send(new GetBookByIdQuery(id));
 
         return result.Match(
                book => Ok(book),
@@ -50,7 +48,7 @@ public class BooksController : ControllerBase
     public async Task<IActionResult> AddBook(AddBookCommand command)
     {
 
-        var result = await _mediator.Send(command);
+        var result = await _sender.Send(command);
 
         return result.Match(
                book => Ok(book),
@@ -60,7 +58,7 @@ public class BooksController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateBook(int id, UpdateBookCommand command)
     {
-        var result = await _mediator.Send(command with { Id = id });
+        var result = await _sender.Send(command with { Id = id });
 
         return result.Match(
                book => Ok(book),
@@ -70,7 +68,7 @@ public class BooksController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteBook(int id)
     {
-        var result = await _mediator.Send(new DeleteBookCommand(id));
+        var result = await _sender.Send(new DeleteBookCommand(id));
 
         return result.Match(
         _ => NoContent(),

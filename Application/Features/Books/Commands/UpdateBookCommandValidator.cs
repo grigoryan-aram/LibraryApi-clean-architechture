@@ -30,8 +30,8 @@ namespace Application.Features.Books.Commands
             RuleFor(x => x.TotalCopies)
                 .GreaterThan(0)
                 .WithMessage("A book needs at least one copy.")
-                .LessThanOrEqualTo(1000)
-                .WithMessage("Total copies cannot exceed 1000.");
+                .LessThanOrEqualTo(100)
+                .WithMessage("Total copies cannot exceed 100.");
         }
     }
 }

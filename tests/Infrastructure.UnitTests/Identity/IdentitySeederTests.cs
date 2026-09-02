@@ -92,10 +92,16 @@ public class IdentitySeederTests
 
         await CreateSut(ConfiguredAdmin).SeedAsync();
 
+        // UserName and Email arrive by Mapster convention from AdminAccountSettings, so
+        // this is also the guard against a rename on either side silently unmapping
+        // them. EmailConfirmed is asserted because it is the one value no convention can
+        // supply — the settings type has no such property — so it has to be set by hand
+        // after the map, and nothing else would catch that line being dropped.
         _userManager.Verify(manager => manager.CreateAsync(
             It.Is<IdentityUser>(user =>
                 user.UserName == ConfiguredAdmin.UserName
-                && user.Email == ConfiguredAdmin.Email),
+                && user.Email == ConfiguredAdmin.Email
+                && user.EmailConfirmed),
             ConfiguredAdmin.Password), Times.Once);
 
         _userManager.Verify(manager => manager.AddToRoleAsync(
