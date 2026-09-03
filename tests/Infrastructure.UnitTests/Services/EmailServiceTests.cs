@@ -2,6 +2,7 @@ using ErrorOr;
 using FluentEmail.Core;
 using FluentEmail.Core.Models;
 using Infrastructure.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Infrastructure.UnitTests.Services;
@@ -32,7 +33,8 @@ public class EmailServiceTests
         _email.Setup(e => e.SendAsync(It.IsAny<CancellationToken?>()))
               .ReturnsAsync(response);
 
-    private EmailService CreateSut() => new(_email.Object);
+    private EmailService CreateSut() =>
+        new(_email.Object, NullLogger<EmailService>.Instance);
 
     [Fact]
     public async Task Reports_success_when_the_send_succeeds()

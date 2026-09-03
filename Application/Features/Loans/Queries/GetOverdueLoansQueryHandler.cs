@@ -3,6 +3,7 @@ using Application.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Loans.Queries
 {
@@ -10,10 +11,14 @@ namespace Application.Features.Loans.Queries
         : IRequestHandler<GetOverdueLoansQuery, ErrorOr<IReadOnlyList<LoansDTO>>>
     {
         private readonly ILoansRepository _loansRepository;
+        private readonly ILogger<GetOverdueLoansQueryHandler> _logger;
 
-        public GetOverdueLoansQueryHandler(ILoansRepository loansRepository)
+        public GetOverdueLoansQueryHandler(
+            ILoansRepository loansRepository,
+            ILogger<GetOverdueLoansQueryHandler> logger)
         {
             _loansRepository = loansRepository;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<IReadOnlyList<LoansDTO>>> Handle(
@@ -24,9 +29,15 @@ namespace Application.Features.Loans.Queries
                 DateTime.UtcNow,
                 cancellationToken);
 
+            var loansDTO = loans.Adapt<IReadOnlyList<LoansDTO>>();
+
+            _logger.LogInformation(
+                "Returned {LoanCount} overdue loans.",
+                loansDTO.Count);
+
             // No overdue loans is a perfectly good answer, so this returns an
             // empty list rather than NotFound.
-            return ErrorOrFactory.From(loans.Adapt<IReadOnlyList<LoansDTO>>());
+            return ErrorOrFactory.From(loansDTO);
         }
     }
 }

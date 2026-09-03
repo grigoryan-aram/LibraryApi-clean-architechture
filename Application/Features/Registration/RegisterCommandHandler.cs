@@ -41,6 +41,12 @@ public class RegisterCommandHandler
 
         if (user.IsError)
         {
+            // The username, never the password — see LoginCommandHandler.
+            _logger.LogWarning(
+                "Failed registration for {Username}: {ErrorCode}.",
+                request.Username,
+                user.FirstError.Code);
+
             return user.Errors;
         }
 
@@ -63,6 +69,11 @@ public class RegisterCommandHandler
                 "Registered {Username} but could not queue the welcome email.",
                 user.Value.Username);
         }
+
+        _logger.LogInformation(
+            "Registered {Username} as user {UserId}.",
+            user.Value.Username,
+            user.Value.UserId);
 
         return user.Value;
     }

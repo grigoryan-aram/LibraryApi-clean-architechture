@@ -2,6 +2,7 @@
 using Application.ServiceInterfaces;
 using ErrorOr;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.ClaudeAI.Queries
 {
@@ -15,15 +16,18 @@ namespace Application.Features.ClaudeAI.Queries
         private readonly IClaudeService _claudeService;
         private readonly IChatHistoryStore _historyStore;
         private readonly IAiUsageLimiter _usageLimiter;
+        private readonly ILogger<AskClaudeQueryHandler> _logger;
 
         public AskClaudeQueryHandler(
             IClaudeService claudeService,
             IChatHistoryStore historyStore,
-            IAiUsageLimiter usageLimiter)
+            IAiUsageLimiter usageLimiter,
+            ILogger<AskClaudeQueryHandler> logger)
         {
             _claudeService = claudeService;
             _historyStore = historyStore;
             _usageLimiter = usageLimiter;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<ClaudeChatDTO>> Handle(
@@ -34,6 +38,12 @@ namespace Application.Features.ClaudeAI.Queries
 
             if (!allowance.Allowed)
             {
+                _logger.LogWarning(
+                    "Refused a Claude request from {Requester}: allowance spent, " +
+                    "retry after {RetryAfter}.",
+                    request.Requester,
+                    allowance.RetryAfter);
+
                 return Error.Failure(
                     "Claude.DailyLimitReached",
                     $"You have used your Claude message for today. " +
@@ -58,6 +68,11 @@ namespace Application.Features.ClaudeAI.Queries
                 // spend the caller's allowance either: retrying with the same
                 // conversation id should not replay a question Claude never
                 // answered, nor cost them a message they never got.
+                _logger.LogError(
+                    "Claude call failed for conversation {ConversationId}: {ErrorCode}.",
+                    conversationId,
+                    reply.FirstError.Code);
+
                 return reply.Errors;
             }
 
@@ -72,6 +87,17 @@ namespace Application.Features.ClaudeAI.Queries
             });
 
             _historyStore.Save(conversationId, history);
+
+            // The message and the reply are deliberately not logged: they are
+            // the caller's content, and the logs are not the place for it.
+            _logger.LogInformation(
+                "Answered {Requester} on conversation {ConversationId} with " +
+                "{Model}: {InputTokens} in, {OutputTokens} out.",
+                request.Requester,
+                conversationId,
+                reply.Value.Model,
+                reply.Value.InputTokens,
+                reply.Value.OutputTokens);
 
             return new ClaudeChatDTO(
                 conversationId,

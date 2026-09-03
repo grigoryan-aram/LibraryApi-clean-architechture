@@ -3,6 +3,7 @@ using Application.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Loans.Commands
 {
@@ -10,10 +11,14 @@ namespace Application.Features.Loans.Commands
         : IRequestHandler<ReturnLoanCommand, ErrorOr<LoansDTO>>
     {
         private readonly ILoansRepository _loansRepository;
+        private readonly ILogger<ReturnLoanCommandHandler> _logger;
 
-        public ReturnLoanCommandHandler(ILoansRepository loansRepository)
+        public ReturnLoanCommandHandler(
+            ILoansRepository loansRepository,
+            ILogger<ReturnLoanCommandHandler> logger)
         {
             _loansRepository = loansRepository;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<LoansDTO>> Handle(
@@ -24,6 +29,10 @@ namespace Application.Features.Loans.Commands
 
             if (loan is null)
             {
+                _logger.LogWarning(
+                    "Rejected return: no loan with id {LoanId}.",
+                    request.Id);
+
                 return Error.NotFound(
                     "Loans.NotFound",
                     $"No loan with id {request.Id}.");
@@ -34,6 +43,11 @@ namespace Application.Features.Loans.Commands
             // say when it was returned so the caller can see why.
             if (loan.ReturnedAt != null)
             {
+                _logger.LogWarning(
+                    "Rejected return of loan {LoanId}: already returned at {ReturnedAt:u}.",
+                    loan.Id,
+                    loan.ReturnedAt);
+
                 return Error.Conflict(
                     "Loans.AlreadyReturned",
                     $"Loan {loan.Id} was already returned on " +
@@ -43,6 +57,13 @@ namespace Application.Features.Loans.Commands
             loan.ReturnedAt = DateTime.UtcNow;
 
             var updated = await _loansRepository.UpdateLoanAsync(loan, cancellationToken);
+
+            _logger.LogInformation(
+                "Returned loan {LoanId} (book {BookId}, member {MemberId}) at {ReturnedAt:u}.",
+                updated.Id,
+                updated.BookId,
+                updated.MemberId,
+                updated.ReturnedAt);
 
             return updated.Adapt<LoansDTO>();
         }

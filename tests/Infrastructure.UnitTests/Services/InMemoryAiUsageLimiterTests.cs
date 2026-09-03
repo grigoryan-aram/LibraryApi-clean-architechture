@@ -2,6 +2,7 @@ using Application.ServiceInterfaces;
 using Infrastructure.Services;
 using Infrastructure.Settings;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Infrastructure.UnitTests.Services;
@@ -10,7 +11,8 @@ public class InMemoryAiUsageLimiterTests
 {
     private static InMemoryAiUsageLimiter CreateSut(int rateLimitHours = 24) =>
         new(new MemoryCache(new MemoryCacheOptions()),
-            Options.Create(new ClaudeSettings { RateLimitHours = rateLimitHours }));
+            Options.Create(new ClaudeSettings { RateLimitHours = rateLimitHours }),
+            NullLogger<InMemoryAiUsageLimiter>.Instance);
 
     [Fact]
     public void Allows_the_first_message_from_a_caller()

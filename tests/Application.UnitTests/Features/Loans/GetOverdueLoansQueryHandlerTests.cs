@@ -1,6 +1,7 @@
 using Application.Features.Loans.Queries;
 using Application.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Loans;
@@ -9,7 +10,7 @@ public class GetOverdueLoansQueryHandlerTests
 {
     private readonly Mock<ILoansRepository> _loans = new();
 
-    private GetOverdueLoansQueryHandler CreateSut() => new(_loans.Object);
+    private GetOverdueLoansQueryHandler CreateSut() => new(_loans.Object, NullLogger<GetOverdueLoansQueryHandler>.Instance);
 
     [Fact]
     public async Task Asks_the_repository_for_loans_overdue_as_of_now()

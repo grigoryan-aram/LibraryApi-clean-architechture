@@ -3,6 +3,7 @@ using ErrorOr;
 using LibraryApi.Application.RepositoryInterfaces;
 using Mapster;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Members.Commands
 {
@@ -10,10 +11,14 @@ namespace Application.Features.Members.Commands
         : IRequestHandler<UpdateMemberCommand, ErrorOr<MembersDTO>>
     {
         private readonly IMembersRepository _membersRepository;
+        private readonly ILogger<UpdateMemberCommandHandler> _logger;
 
-        public UpdateMemberCommandHandler(IMembersRepository membersRepository)
+        public UpdateMemberCommandHandler(
+            IMembersRepository membersRepository,
+            ILogger<UpdateMemberCommandHandler> logger)
         {
             _membersRepository = membersRepository;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<MembersDTO>> Handle(
@@ -26,6 +31,10 @@ namespace Application.Features.Members.Commands
 
             if (member is null)
             {
+                _logger.LogWarning(
+                    "Rejected updating member {MemberId}: no such member.",
+                    request.Id);
+
                 return Error.NotFound(
                     "Members.NotFound",
                     $"No member with id {request.Id}.");
@@ -36,6 +45,11 @@ namespace Application.Features.Members.Commands
             var updated = await _membersRepository.UpdateMemberAsync(
                 member,
                 cancellationToken);
+
+            _logger.LogInformation(
+                "Updated member {MemberId} ({Name}).",
+                updated.Id,
+                updated.Name);
 
             return updated.Adapt<MembersDTO>();
         }

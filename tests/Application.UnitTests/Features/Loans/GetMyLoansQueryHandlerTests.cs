@@ -3,6 +3,7 @@ using Application.RepositoryInterfaces;
 using ErrorOr;
 using LibraryApi.Application.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Loans;
@@ -12,7 +13,7 @@ public class GetMyLoansQueryHandlerTests
     private readonly Mock<ILoansRepository> _loans = new();
     private readonly Mock<IMembersRepository> _members = new();
 
-    private GetMyLoansQueryHandler CreateSut() => new(_loans.Object, _members.Object);
+    private GetMyLoansQueryHandler CreateSut() => new(_loans.Object, _members.Object, NullLogger<GetMyLoansQueryHandler>.Instance);
 
     private static GetMyLoansQuery Query => new("user-1");
 

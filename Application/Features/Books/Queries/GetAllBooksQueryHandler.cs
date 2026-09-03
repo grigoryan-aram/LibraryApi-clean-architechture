@@ -3,6 +3,7 @@ using Application.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Books.Queries
 {
@@ -11,14 +12,17 @@ namespace Application.Features.Books.Queries
 
         private readonly IBooksRepository _booksRepository;
         private readonly ILoansRepository _loansRepository;
+        private readonly ILogger<GetAllBooksQueryHandler> _logger;
 
 
         public GetAllBooksQueryHandler(
             IBooksRepository booksRepository,
-            ILoansRepository loansRepository)
+            ILoansRepository loansRepository,
+            ILogger<GetAllBooksQueryHandler> logger)
         {
             _booksRepository = booksRepository;
             _loansRepository = loansRepository;
+            _logger = logger;
         }
 
 
@@ -30,6 +34,8 @@ namespace Application.Features.Books.Queries
 
             if (books == null)
             {
+                _logger.LogError("The books repository returned no collection.");
+
                 return Error.NotFound("Books not found");
             }
 
@@ -41,6 +47,8 @@ namespace Application.Features.Books.Queries
                     CopiesOnLoan = onLoan.TryGetValue(book.Id, out var count) ? count : 0
                 })
                 .ToList();
+
+            _logger.LogInformation("Returned {BookCount} books.", booksDto.Count);
 
             return ErrorOrFactory.From<IReadOnlyList<BooksDTO>>(booksDto);
         }

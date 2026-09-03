@@ -2,6 +2,7 @@ using Application.Features.Books.Commands;
 using Application.RepositoryInterfaces;
 using ErrorOr;
 using LibraryApi.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Books;
@@ -13,7 +14,10 @@ public class UpdateBookCommandHandlerTests
     private readonly Mock<ILoansRepository> _loans = new();
 
     private UpdateBookCommandHandler CreateSut() =>
-        new(_books.Object, _categorys.Object, _loans.Object);
+        new(_books.Object,
+            _categorys.Object,
+            _loans.Object,
+            NullLogger<UpdateBookCommandHandler>.Instance);
 
     private static UpdateBookCommand Command(int totalCopies = 2) =>
         new(Id: 1, Title: "Dune", Author: "Frank Herbert", CategoryId: 3, TotalCopies: totalCopies);

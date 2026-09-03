@@ -2,6 +2,7 @@ using Application.Features.Loans.Commands;
 using Application.RepositoryInterfaces;
 using ErrorOr;
 using LibraryApi.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Loans;
@@ -10,7 +11,7 @@ public class ReturnLoanCommandHandlerTests
 {
     private readonly Mock<ILoansRepository> _loans = new();
 
-    private ReturnLoanCommandHandler CreateSut() => new(_loans.Object);
+    private ReturnLoanCommandHandler CreateSut() => new(_loans.Object, NullLogger<ReturnLoanCommandHandler>.Instance);
 
     private void GivenLoan(LoanModel? loan) =>
         _loans.Setup(repo => repo.GetLoanByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))

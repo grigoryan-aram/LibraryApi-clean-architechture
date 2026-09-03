@@ -10,7 +10,6 @@ namespace Infrastructure.Services
     public class EmailService : IEmailService
     {
         private readonly IFluentEmail _email;
-
         private readonly ILogger<EmailService> _logger;
 
         public EmailService(IFluentEmail email, ILogger<EmailService> logger)
@@ -41,8 +40,8 @@ namespace Infrastructure.Services
                 // this method promises not to throw. Map anything that escapes
                 // rather than letting it past.
                 _logger.LogError(
-                    exception.Message,
-                    "Failed to send welcome email to {Email}",
+                    exception,
+                    "Failed to send welcome email to {Email}.",
                     email);
 
                 return Error.Failure(
@@ -56,6 +55,11 @@ namespace Infrastructure.Services
             // recorded as a succeeded Hangfire job.
             if (!response.Successful)
             {
+                _logger.LogError(
+                    "Failed to send welcome email to {Email}: {Errors}",
+                    email,
+                    string.Join("; ", response.ErrorMessages));
+
                 return Error.Failure(
                     "Email.SendFailed",
                     $"Failed to send welcome email to {email}: " +

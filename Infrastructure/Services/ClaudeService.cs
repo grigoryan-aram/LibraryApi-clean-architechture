@@ -5,6 +5,7 @@ using Application.DTOs;
 using Application.ServiceInterfaces;
 using ErrorOr;
 using Infrastructure.Settings;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Services
@@ -13,14 +14,17 @@ namespace Infrastructure.Services
     {
         private readonly ClaudeSettings _settings;
 
+        private readonly ILogger<ClaudeService> _logger;
+
         // Built on first use rather than in the constructor: with no key
         // configured the service still resolves and AskAsync returns a proper
         // ErrorOr instead of the container throwing on every request.
         private readonly Lazy<AnthropicClient> _client;
 
-        public ClaudeService(IOptions<ClaudeSettings> settings)
+        public ClaudeService(IOptions<ClaudeSettings> settings, ILogger<ClaudeService> logger)
         {
             _settings = settings.Value;
+            _logger = logger;
 
             _client = new Lazy<AnthropicClient>(() => new AnthropicClient
             {
@@ -34,6 +38,10 @@ namespace Infrastructure.Services
         {
             if (string.IsNullOrWhiteSpace(_settings.ApiKey))
             {
+                _logger.LogError(
+                    "No Claude API key is configured. Set Claude:ApiKey in user " +
+                    "secrets or the ANTHROPIC_API_KEY environment variable.");
+
                 return Error.Failure(
                     "Claude.ApiKeyMissing",
                     "No Claude API key is configured. Set Claude:ApiKey in user " +

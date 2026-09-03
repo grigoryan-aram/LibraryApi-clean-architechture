@@ -4,6 +4,7 @@ using ErrorOr;
 using LibraryApi.Domain.Entities;
 using Mapster;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Categorys.Commands
 {
@@ -11,10 +12,14 @@ namespace Application.Features.Categorys.Commands
     {
 
         private readonly ICategorysRepository _categorysRepository;
+        private readonly ILogger<AddCategoryCommandHandler> _logger;
 
-        public AddCategoryCommandHandler(ICategorysRepository categorysRepository)
+        public AddCategoryCommandHandler(
+            ICategorysRepository categorysRepository,
+            ILogger<AddCategoryCommandHandler> logger)
         {
             _categorysRepository = categorysRepository;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<CategorysDTO>> Handle(AddCategoryCommand request, CancellationToken cancellationToken)
@@ -25,8 +30,17 @@ namespace Application.Features.Categorys.Commands
 
             if (result is null)
             {
+                _logger.LogError(
+                    "The categorys repository returned no row when adding {Title}.",
+                    request.title);
+
                 return Error.Failure("Category.Add", "Failed to add category");
             }
+
+            _logger.LogInformation(
+                "Added category {CategoryId} ({Name}).",
+                result.Id,
+                result.Name);
 
             return result.Adapt<CategorysDTO>();
         }

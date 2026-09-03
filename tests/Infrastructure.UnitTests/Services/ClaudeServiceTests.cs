@@ -2,6 +2,7 @@ using Application.DTOs;
 using ErrorOr;
 using Infrastructure.Services;
 using Infrastructure.Settings;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Infrastructure.UnitTests.Services;
@@ -14,7 +15,7 @@ public class ClaudeServiceTests
     ];
 
     private static ClaudeService CreateSut(ClaudeSettings settings) =>
-        new(Options.Create(settings));
+        new(Options.Create(settings), NullLogger<ClaudeService>.Instance);
 
     // The missing-key path is the one worth pinning: it has to come back as an
     // ErrorOr the pipeline can turn into a 400, not as an exception from the

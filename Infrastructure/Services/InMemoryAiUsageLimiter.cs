@@ -1,6 +1,7 @@
 using Application.ServiceInterfaces;
 using Infrastructure.Settings;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Services
@@ -14,13 +15,16 @@ namespace Infrastructure.Services
     {
         private readonly IMemoryCache _cache;
         private readonly TimeSpan _window;
+        private readonly ILogger<InMemoryAiUsageLimiter> _logger;
 
         public InMemoryAiUsageLimiter(
             IMemoryCache cache,
-            IOptions<ClaudeSettings> settings)
+            IOptions<ClaudeSettings> settings,
+            ILogger<InMemoryAiUsageLimiter> logger)
         {
             _cache = cache;
             _window = TimeSpan.FromHours(settings.Value.RateLimitHours);
+            _logger = logger;
         }
 
         public AiUsageDecision Check(string requester)
@@ -47,6 +51,11 @@ namespace Infrastructure.Services
         {
             if (_window <= TimeSpan.Zero)
             {
+                _logger.LogDebug(
+                    "AI rate limiting is off (RateLimitHours is {RateLimitHours}), so " +
+                    "nothing was recorded for this request.",
+                    _window.TotalHours);
+
                 return;
             }
 

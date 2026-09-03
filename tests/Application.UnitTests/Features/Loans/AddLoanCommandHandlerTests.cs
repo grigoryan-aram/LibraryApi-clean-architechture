@@ -4,6 +4,7 @@ using Application.ServiceInterfaces;
 using ErrorOr;
 using LibraryApi.Application.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Loans;
@@ -27,7 +28,11 @@ public class AddLoanCommandHandlerTests
     }
 
     private AddLoanCommandHandler CreateSut() =>
-        new(_loans.Object, _books.Object, _members.Object, new FixedLoanPolicy());
+        new(_loans.Object,
+            _books.Object,
+            _members.Object,
+            new FixedLoanPolicy(),
+            NullLogger<AddLoanCommandHandler>.Instance);
 
     private void GivenBookExists(int id = 1, int totalCopies = 1) =>
         _books.Setup(repo => repo.GetByIdAsync(id, It.IsAny<CancellationToken>()))

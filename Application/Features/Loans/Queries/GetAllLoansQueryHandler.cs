@@ -3,6 +3,7 @@ using Application.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Loans.Queries
 {
@@ -11,10 +12,14 @@ namespace Application.Features.Loans.Queries
 
 
         private readonly ILoansRepository _loansRepository;
+        private readonly ILogger<GetAllLoansQueryHandler> _logger;
 
-        public GetAllLoansQueryHandler(ILoansRepository loansRepository)
+        public GetAllLoansQueryHandler(
+            ILoansRepository loansRepository,
+            ILogger<GetAllLoansQueryHandler> logger)
         {
             _loansRepository = loansRepository;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<IReadOnlyList<LoansDTO>>> Handle(GetAllLoansQuery request, CancellationToken cancellationToken)
@@ -24,12 +29,17 @@ namespace Application.Features.Loans.Queries
 
             if (loans == null)
             {
+                _logger.LogError("The loans repository returned no collection.");
 
                 return Error.NotFound("Loans.NotFound", "No loans found.");
 
             }
 
-            return ErrorOrFactory.From(loans.Adapt<IReadOnlyList<LoansDTO>>());
+            var loansDTO = loans.Adapt<IReadOnlyList<LoansDTO>>();
+
+            _logger.LogInformation("Returned {LoanCount} loans.", loansDTO.Count);
+
+            return ErrorOrFactory.From(loansDTO);
 
         }
     }

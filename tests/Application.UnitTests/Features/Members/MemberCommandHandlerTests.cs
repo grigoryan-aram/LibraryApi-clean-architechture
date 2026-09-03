@@ -2,6 +2,7 @@ using Application.Features.Members.Commands;
 using ErrorOr;
 using LibraryApi.Application.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Members;
@@ -12,7 +13,8 @@ public class AddMemberCommandHandlerTests
 
     private int _idPassedToRepository = -1;
 
-    private AddMemberCommandHandler CreateSut() => new(_members.Object);
+    private AddMemberCommandHandler CreateSut() =>
+        new(_members.Object, NullLogger<AddMemberCommandHandler>.Instance);
 
     private void GivenTheMemberIsSaved() =>
         _members.Setup(repo => repo.AddMemberAsync(
@@ -57,7 +59,8 @@ public class UpdateMemberCommandHandlerTests
 {
     private readonly Mock<IMembersRepository> _members = new();
 
-    private UpdateMemberCommandHandler CreateSut() => new(_members.Object);
+    private UpdateMemberCommandHandler CreateSut() =>
+        new(_members.Object, NullLogger<UpdateMemberCommandHandler>.Instance);
 
     private static UpdateMemberCommand Command => new(Id: 5, Name: "Ada Byron");
 

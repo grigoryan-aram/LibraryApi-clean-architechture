@@ -1,7 +1,9 @@
 using Application.DTOs;
 using Application.Features.ClaudeAI.Queries;
 using Application.ServiceInterfaces;
+using Application.UnitTests.TestDoubles;
 using ErrorOr;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Application.UnitTests.Features.ClaudeAI;
@@ -13,6 +15,7 @@ public class AskClaudeQueryHandlerTests
     private readonly Mock<IClaudeService> _claudeService = new();
     private readonly Mock<IChatHistoryStore> _historyStore = new();
     private readonly Mock<IAiUsageLimiter> _usageLimiter = new();
+    private readonly RecordingLogger<AskClaudeQueryHandler> _logger = new();
 
     private static readonly ClaudeReplyDTO Reply =
         new("Four.", "claude-opus-5", 12, 3);
@@ -32,7 +35,10 @@ public class AskClaudeQueryHandlerTests
     }
 
     private AskClaudeQueryHandler CreateSut() =>
-        new(_claudeService.Object, _historyStore.Object, _usageLimiter.Object);
+        new(_claudeService.Object,
+            _historyStore.Object,
+            _usageLimiter.Object,
+            _logger);
 
     private void GivenClaudeReturns(ErrorOr<ClaudeReplyDTO> reply) =>
         _claudeService
@@ -255,5 +261,58 @@ public class AskClaudeQueryHandlerTests
         Assert.Equal("message 12", history[0].Content);
         Assert.Equal("the newest question", history[^2].Content);
         Assert.Equal("Four.", history[^1].Content);
+    }
+
+    // The chat is the caller's content and the logs are not the place for it.
+    // Token counts and the model are fine; the question and the answer are not.
+    [Fact]
+    public async Task Never_writes_the_question_or_the_answer_to_the_log()
+    {
+        GivenClaudeReturns(Reply);
+
+        await CreateSut().Handle(
+            new AskClaudeQuery("my private question", null, Requester),
+            CancellationToken.None);
+
+        Assert.NotEmpty(_logger.Entries);
+        Assert.False(_logger.Mentions("my private question"));
+        Assert.False(_logger.Mentions("Four."));
+
+        var information = Assert.Single(_logger.At(LogLevel.Information));
+        Assert.Contains("claude-opus-5", information.Message);
+        Assert.Contains("ada", information.Message);
+    }
+
+    [Fact]
+    public async Task Logs_a_warning_rather_than_an_error_when_the_allowance_is_spent()
+    {
+        _usageLimiter
+            .Setup(l => l.Check(Requester))
+            .Returns(new AiUsageDecision(false, TimeSpan.FromHours(5)));
+
+        await CreateSut().Handle(
+            new AskClaudeQuery("one too many", null, Requester),
+            CancellationToken.None);
+
+        var warning = Assert.Single(_logger.At(LogLevel.Warning));
+        Assert.Contains("ada", warning.Message);
+        Assert.False(_logger.Mentions("one too many"));
+        Assert.Empty(_logger.At(LogLevel.Error));
+    }
+
+    [Fact]
+    public async Task Logs_an_error_with_the_code_when_the_claude_call_fails()
+    {
+        GivenClaudeReturns(Error.Failure(
+            "Claude.ApiKeyMissing",
+            "No Claude API key is configured."));
+
+        await CreateSut().Handle(
+            new AskClaudeQuery("What is 2 + 2?", null, Requester),
+            CancellationToken.None);
+
+        var error = Assert.Single(_logger.At(LogLevel.Error));
+        Assert.Contains("Claude.ApiKeyMissing", error.Message);
+        Assert.Empty(_logger.At(LogLevel.Information));
     }
 }

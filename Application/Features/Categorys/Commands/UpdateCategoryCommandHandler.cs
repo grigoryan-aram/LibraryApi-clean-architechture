@@ -3,6 +3,7 @@ using Application.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Categorys.Commands
 {
@@ -10,10 +11,14 @@ namespace Application.Features.Categorys.Commands
         : IRequestHandler<UpdateCategoryCommand, ErrorOr<CategorysDTO>>
     {
         private readonly ICategorysRepository _categorysRepository;
+        private readonly ILogger<UpdateCategoryCommandHandler> _logger;
 
-        public UpdateCategoryCommandHandler(ICategorysRepository categorysRepository)
+        public UpdateCategoryCommandHandler(
+            ICategorysRepository categorysRepository,
+            ILogger<UpdateCategoryCommandHandler> logger)
         {
             _categorysRepository = categorysRepository;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<CategorysDTO>> Handle(
@@ -26,6 +31,10 @@ namespace Application.Features.Categorys.Commands
 
             if (category is null)
             {
+                _logger.LogWarning(
+                    "Rejected updating category {CategoryId}: no such category.",
+                    request.Id);
+
                 return Error.NotFound(
                     "Categorys.NotFound",
                     $"No category with id {request.Id}.");
@@ -36,6 +45,11 @@ namespace Application.Features.Categorys.Commands
             var updated = await _categorysRepository.UpdateCategoryAsync(
                 category,
                 cancellationToken);
+
+            _logger.LogInformation(
+                "Updated category {CategoryId} ({Name}).",
+                updated.Id,
+                updated.Name);
 
             return updated.Adapt<CategorysDTO>();
         }

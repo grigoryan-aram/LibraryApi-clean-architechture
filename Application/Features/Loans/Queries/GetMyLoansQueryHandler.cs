@@ -4,6 +4,7 @@ using ErrorOr;
 using LibraryApi.Application.RepositoryInterfaces;
 using Mapster;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Loans.Queries
 {
@@ -12,13 +13,16 @@ namespace Application.Features.Loans.Queries
     {
         private readonly ILoansRepository _loansRepository;
         private readonly IMembersRepository _membersRepository;
+        private readonly ILogger<GetMyLoansQueryHandler> _logger;
 
         public GetMyLoansQueryHandler(
             ILoansRepository loansRepository,
-            IMembersRepository membersRepository)
+            IMembersRepository membersRepository,
+            ILogger<GetMyLoansQueryHandler> logger)
         {
             _loansRepository = loansRepository;
             _membersRepository = membersRepository;
+            _logger = logger;
         }
 
         public async Task<ErrorOr<IReadOnlyList<LoansDTO>>> Handle(
@@ -31,6 +35,10 @@ namespace Application.Features.Loans.Queries
 
             if (member is null)
             {
+                _logger.LogWarning(
+                    "Account {IdentityUserId} is not linked to a library member.",
+                    request.IdentityUserId);
+
                 return Error.NotFound(
                     "Loans.NoMemberForAccount",
                     "This account is not linked to a library member, so it " +
@@ -41,7 +49,14 @@ namespace Application.Features.Loans.Queries
                 member.Id,
                 cancellationToken);
 
-            return ErrorOrFactory.From(loans.Adapt<IReadOnlyList<LoansDTO>>());
+            var loansDTO = loans.Adapt<IReadOnlyList<LoansDTO>>();
+
+            _logger.LogInformation(
+                "Returned {LoanCount} loans for member {MemberId}.",
+                loansDTO.Count,
+                member.Id);
+
+            return ErrorOrFactory.From(loansDTO);
         }
     }
 }

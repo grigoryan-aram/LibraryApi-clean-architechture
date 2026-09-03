@@ -2,6 +2,7 @@ using Application.Features.Categorys.Commands;
 using Application.RepositoryInterfaces;
 using ErrorOr;
 using LibraryApi.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Categorys;
@@ -10,7 +11,7 @@ public class UpdateCategoryCommandHandlerTests
 {
     private readonly Mock<ICategorysRepository> _categorys = new();
 
-    private UpdateCategoryCommandHandler CreateSut() => new(_categorys.Object);
+    private UpdateCategoryCommandHandler CreateSut() => new(_categorys.Object, NullLogger<UpdateCategoryCommandHandler>.Instance);
 
     private static UpdateCategoryCommand Command => new(Id: 3, Name: "Science Fiction");
 

@@ -1,6 +1,7 @@
 using Application.Features.Books.Queries;
 using Application.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Application.UnitTests.Features.Books;
@@ -10,7 +11,7 @@ public class GetAllBooksQueryHandlerTests
     private readonly Mock<IBooksRepository> _books = new();
     private readonly Mock<ILoansRepository> _loans = new();
 
-    private GetAllBooksQueryHandler CreateSut() => new(_books.Object, _loans.Object);
+    private GetAllBooksQueryHandler CreateSut() => new(_books.Object, _loans.Object, NullLogger<GetAllBooksQueryHandler>.Instance);
 
     private void GivenTheCatalogue(params BookModel[] books) =>
         _books.Setup(repo => repo.GetAllAsync(It.IsAny<CancellationToken>()))
