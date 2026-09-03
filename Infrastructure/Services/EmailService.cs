@@ -2,6 +2,7 @@ using Application.ServiceInterfaces;
 using ErrorOr;
 using FluentEmail.Core;
 using FluentEmail.Core.Models;
+using Microsoft.Extensions.Logging;
 
 
 namespace Infrastructure.Services
@@ -10,9 +11,13 @@ namespace Infrastructure.Services
     {
         private readonly IFluentEmail _email;
 
-        public EmailService(IFluentEmail email)
+        private readonly ILogger<EmailService> _logger;
+
+        public EmailService(IFluentEmail email, ILogger<EmailService> logger)
         {
             _email = email;
+
+            _logger = logger;
         }
 
         public async Task<ErrorOr<Success>> SendWelcomeEmailAsync(
@@ -35,6 +40,11 @@ namespace Infrastructure.Services
                 // them on the response, but it is a third-party library and
                 // this method promises not to throw. Map anything that escapes
                 // rather than letting it past.
+                _logger.LogError(
+                    exception.Message,
+                    "Failed to send welcome email to {Email}",
+                    email);
+
                 return Error.Failure(
                     "Email.SendFailed",
                     $"Failed to send welcome email to {email}: {exception.Message}");
