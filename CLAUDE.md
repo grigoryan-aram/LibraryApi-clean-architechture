@@ -9,7 +9,7 @@ The solution is **`LibraryApi.slnx`** at the repo root.
 | Project | Path | References |
 |---|---|---|
 | Domain | `Domain/Domain.csproj` | — |
-| Application | `Application/Application.csproj` | Domain |
+| Application | `Application/Application.csproj` | Domain |z
 | Infrastructure | `Infrastructure/Infrastructure.csproj` | Application, Domain |
 | Presentation (web host) | `LibraryApi/Presentation.csproj` | Infrastructure |
 | Application tests | `tests/Application.UnitTests/` | Application |

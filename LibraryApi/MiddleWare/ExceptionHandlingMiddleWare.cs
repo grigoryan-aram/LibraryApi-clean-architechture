@@ -29,7 +29,7 @@ public class GlobalExceptionMiddleware
             await HandleExceptionAsync(context);
         }
     }
-
+    //
     private static async Task HandleExceptionAsync(HttpContext context)
     {
         context.Response.ContentType = "application/json";
