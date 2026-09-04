@@ -1,6 +1,7 @@
 using Application.DTOs;
 using Application.ServiceInterfaces;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Services
 {
@@ -11,11 +12,15 @@ namespace Infrastructure.Services
     {
         private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(30);
 
+        private readonly ILogger<InMemoryChatHistoryStore> _logger;
         private readonly IMemoryCache _cache;
 
-        public InMemoryChatHistoryStore(IMemoryCache cache)
+        public InMemoryChatHistoryStore(
+            IMemoryCache cache,
+            ILogger<InMemoryChatHistoryStore> logger)
         {
             _cache = cache;
+            _logger = logger;
         }
 
         public IReadOnlyList<ChatMessageDTO> Get(Guid conversationId)
@@ -35,6 +40,8 @@ namespace Infrastructure.Services
             Guid conversationId,
             IReadOnlyList<ChatMessageDTO> conversation)
         {
+            _logger.LogInformation("Saving chat history for conversation: {ConversationId}", conversationId);
+
             _cache.Set(
                 Key(conversationId),
                 conversation,

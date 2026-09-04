@@ -38,6 +38,8 @@ namespace Application.Features.Members.Commands
                     "The members repository returned no row when adding {Name}.",
                     request.Name);
 
+                _logger.LogWarning("no rows returned in memebers");
+
                 return Error.Failure("failed to add member", "a failure has occurred");
             }
 
