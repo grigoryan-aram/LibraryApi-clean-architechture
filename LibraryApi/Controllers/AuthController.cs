@@ -3,12 +3,14 @@ using Application.Features.Registration;
 using ErrorOr;
 using LibraryApi.Extensions;
 using MediatR;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 
-namespace LibraryApi.Controllers
-{
+namespace LibraryApi.Controllers;
+
+    [EnableCors]
     [ApiController]
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
@@ -69,4 +71,3 @@ namespace LibraryApi.Controllers
             return this.ToProblem(errors);
         }
     }
-}

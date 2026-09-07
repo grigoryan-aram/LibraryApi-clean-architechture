@@ -3,10 +3,12 @@ using Application.Features.Members.Queries;
 using LibraryApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LibraryApi.Controllers;
 
+[EnableCors]
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
