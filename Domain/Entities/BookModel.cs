@@ -18,3 +18,4 @@ public class BookModel
     public ICollection<LoanModel> Loans { get; set; } = new List<LoanModel>();
 
 }
+

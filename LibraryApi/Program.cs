@@ -8,6 +8,7 @@ using LibraryApi.MiddleWares;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -132,6 +133,14 @@ if (requireHttps)
     if (!app.Environment.IsDevelopment())
     {
         app.UseHsts();
+        // CORS is only needed for the production host, which serves the API
+        app.UseCors(CorsOptions =>
+        {
+            CorsOptions.AllowAnyOrigin();
+            CorsOptions.AllowAnyHeader();
+            CorsOptions.AllowAnyMethod();
+        });
+
     }
 
     app.UseHttpsRedirection();
@@ -175,16 +184,10 @@ app.UseAdminOnlyPath("/swagger");
 
 app.UseSwagger();
 app.UseSwaggerUI();
-
-
-
 app.MapStaticAssets();
-
 app.MapControllers();
-
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<LibraryDBContext>();

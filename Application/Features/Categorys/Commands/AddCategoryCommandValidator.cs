@@ -13,6 +13,8 @@ namespace Application.Features.Categorys.Commands
 
             RuleFor(x => x.id)
                 .GreaterThan(0).WithMessage("Category ID must be greater than 0.");
+                
+
         }
     }
 }
