@@ -33,20 +33,17 @@ namespace Infrastructure.Services
                     .Body($"Welcome, {username}!")
                     .SendAsync();
             }
-            catch (Exception exception)
+            catch (Exception ex)
             {
-                // FluentEmail's MailKit sender catches SMTP errors and reports
-                // them on the response, but it is a third-party library and
-                // this method promises not to throw. Map anything that escapes
-                // rather than letting it past.
+               
                 _logger.LogError(
-                    exception,
+                    ex,
                     "Failed to send welcome email to {Email}.",
                     email);
 
                 return Error.Failure(
                     "Email.SendFailed",
-                    $"Failed to send welcome email to {email}: {exception.Message}");
+                    $"Failed to send welcome email to {email}: {ex.Message}");
             }
 
             // FluentEmail reports SMTP failures on the response instead of

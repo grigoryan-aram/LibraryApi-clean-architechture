@@ -1,4 +1,5 @@
 ﻿
+using ErrorOr;
 using Microsoft.AspNetCore.Mvc;
 
 
@@ -29,11 +30,13 @@ public class GlobalExceptionMiddleware
             await HandleExceptionAsync(context);
         }
     }
-    //
-    private static async Task HandleExceptionAsync(HttpContext context)
+    
+    private async Task HandleExceptionAsync(HttpContext context)
     {
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+
+        _logger.LogInformation("Handling exception and returning 500 Internal Server Error response.");
 
         var problem = new ProblemDetails
         {
