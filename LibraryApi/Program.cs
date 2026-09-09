@@ -13,18 +13,7 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// The host (MonsterASP shared IIS) has no place to set environment variables,
-// so production credentials live in appsettings.Secrets.json. That file is
-// gitignored and copied to the server by publishing (see the Content item in
-// Presentation.csproj), so it is never committed and never hand-uploaded.
-//
-// Production ONLY, deliberately: the file holds the production connection
-// string, and loading it locally would silently point `dotnet run` — and the
-// Database.Migrate() call at the bottom of this file — at the live database.
-// Local development gets these values from user secrets instead.
-//
-// Environment variables are re-added afterwards so they still win on a host
-// that does support them.
+
 if (builder.Environment.IsProduction())
 {
     builder.Configuration
@@ -33,25 +22,13 @@ if (builder.Environment.IsProduction())
 }
 
 builder.Services.AddControllers();
-
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-
-// Blazor Server: interactive components run on a SignalR circuit (WebSocket),
-// so the pages can call IMediator in-process instead of going back out over
-// HTTP to this same app.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-
 builder.Services.AddCascadingAuthenticationState();
-
-// SignInManager reaches for the current request through IHttpContextAccessor
-// when it is used outside a controller, which is what Account.razor does.
 builder.Services.AddHttpContextAccessor();
 
-
-// fix
 builder.Services.AddRateLimiter(options =>
 {
     options.AddFixedWindowLimiter("fixed", limiterOptions =>
@@ -62,17 +39,8 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-
-
-
-
-
 builder.Services.AddApplication();
 
-// AddInfrastructure reports a misconfiguration instead of throwing one, so
-// stopping is this file's job. There is no host and no ILogger yet, hence
-// stderr; and it happens before Build(), so nothing has opened a database
-// connection or started a Hangfire worker by the time we quit.
 var infrastructure = builder.Services.AddInfrastructure(builder.Configuration);
 
 if (infrastructure.IsError)
@@ -82,27 +50,10 @@ if (infrastructure.IsError)
         Console.Error.WriteLine($"Cannot start: [{error.Code}] {error.Description}");
     }
 
-    // Non-zero, so a process manager or CI step sees a failed start rather
-    // than a clean exit.
+   
     Environment.ExitCode = 1;
     return;
 }
-
-
-// Identity defaults to /Account/Login, which does not exist here — a browser
-// hitting a [Authorize] page was being sent to a 404. Point it at the Blazor
-// account page instead. API callers are unaffected: the cookie handler still
-// answers 401 when the request does not accept HTML.
-// Whether this deployment can actually serve TLS. It is TRUE everywhere by
-// default and false only where a config file says so — currently the
-// production host, whose free plan does not offer a certificate, so the site
-// is served over plain HTTP as a deliberate and recorded decision.
-//
-// While it is false, login passwords, the session cookie and the Blazor
-// WebSocket all cross the network in the clear, and anyone sharing a network
-// with a user can take over their session. Flip it back to true the day the
-// host has a certificate: it turns the redirect, HSTS and the cookie's Secure
-// flag back on together.
 var requireHttps = builder.Configuration.GetValue("Security:RequireHttps", true);
 
 builder.Services.ConfigureApplicationCookie(options =>

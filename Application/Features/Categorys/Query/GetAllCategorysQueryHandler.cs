@@ -4,6 +4,8 @@ using ErrorOr;
 using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
+
+
 namespace Application.Features.Categorys.Query
 {
     public class GetAllCategorysQueryHandler : IRequestHandler<GetAllCategorysQuery, ErrorOr<IReadOnlyList<CategorysDTO>>>
