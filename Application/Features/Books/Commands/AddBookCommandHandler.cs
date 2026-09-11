@@ -33,7 +33,7 @@ namespace Application.Features.Books.Commands
                 request.CategoryId,
                 cancellationToken);
 
-            if (category is null)
+            if (category == null)
             {
                 _logger.LogWarning(
                     "Rejected adding book {Title}: no category with id {CategoryId}.",

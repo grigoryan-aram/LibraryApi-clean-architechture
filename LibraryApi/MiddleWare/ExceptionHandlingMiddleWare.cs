@@ -1,9 +1,9 @@
 ﻿
-using ErrorOr;
 using Microsoft.AspNetCore.Mvc;
 
 
-
+namespace LibraryApi.MiddleWares;
+    
 public class GlobalExceptionMiddleware
 {
     private readonly RequestDelegate _next;

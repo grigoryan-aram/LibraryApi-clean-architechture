@@ -84,14 +84,6 @@ if (requireHttps)
     if (!app.Environment.IsDevelopment())
     {
         app.UseHsts();
-        // CORS is only needed for the production host, which serves the API
-        app.UseCors(CorsOptions =>
-        {
-            CorsOptions.AllowAnyOrigin();
-            CorsOptions.AllowAnyHeader();
-            CorsOptions.AllowAnyMethod();
-        });
-
     }
 
     app.UseHttpsRedirection();
@@ -107,6 +99,18 @@ else
 }
 
 app.UseRateLimiter();
+
+// Unconditional, because [EnableCors] on the controllers is unconditional.
+// Nested inside "if (requireHttps) / if (!IsDevelopment())" it never ran in
+// Production — Security:RequireHttps is false there — and an endpoint that
+// carries CORS metadata with no CORS middleware in the pipeline makes
+// EndpointMiddleware throw, which turned every API call into a 500.
+app.UseCors(cors =>
+{
+    cors.AllowAnyOrigin();
+    cors.AllowAnyHeader();
+    cors.AllowAnyMethod();
+});
 
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
