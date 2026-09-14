@@ -21,8 +21,8 @@ public class SendWelcomeEmailJob
 
         if (result.IsError)
         {
+            // ape lav es miak texna vor tochniya zerov qcely
 
-            // The only place that throws an exception.
             throw new InvalidOperationException(
                 string.Join("; ", result.Errors.Select(error => error.Description)));
         }
