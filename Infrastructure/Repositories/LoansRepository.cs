@@ -92,7 +92,7 @@ namespace Infrastructure.Repositories
                     l => l.BookId == bookId && l.ReturnedAt == null,
                     cancellationToken);
         }
-
+         
         public async Task<IReadOnlyDictionary<int, int>> CountActiveLoansByBookAsync(
             CancellationToken cancellationToken)
         {

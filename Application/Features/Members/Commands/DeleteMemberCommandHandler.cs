@@ -15,6 +15,7 @@ namespace Application.Features.Members.Commands
             ILogger<DeleteMemberCommandHandler> logger)
         {
             _membersRepository = membersRepository;
+
             _logger = logger;
         }
 
