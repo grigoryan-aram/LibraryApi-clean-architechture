@@ -22,8 +22,5 @@ public static class Roles
     /// </summary>
     public const string User = "User";
 
-    
-    public const string Guest = "Guest";
-
     public static readonly IReadOnlyList<string> All = [Admin, User];
 }

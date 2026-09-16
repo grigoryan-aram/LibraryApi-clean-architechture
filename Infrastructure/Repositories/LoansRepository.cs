@@ -1,4 +1,4 @@
-using Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;

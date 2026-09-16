@@ -1,6 +1,6 @@
 using LibraryApi.Domain.Entities;
 
-namespace LibraryApi.Application.RepositoryInterfaces
+namespace LibraryApi.Domain.RepositoryInterfaces
 {
     public interface IMembersRepository
     {

@@ -1,5 +1,5 @@
 ﻿using Application.DTOs;
-using Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
 using MediatR;

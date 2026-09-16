@@ -1,6 +1,6 @@
 using Application.Features.Members.Commands;
 using ErrorOr;
-using LibraryApi.Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;

@@ -1,5 +1,5 @@
 ﻿using ErrorOr;
-using LibraryApi.Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
 namespace Application.Features.Members.Commands

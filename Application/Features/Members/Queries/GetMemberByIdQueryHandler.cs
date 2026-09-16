@@ -1,6 +1,6 @@
 ﻿using Application.DTOs;
 using ErrorOr;
-using LibraryApi.Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
 using Mapster;
 using MediatR;

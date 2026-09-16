@@ -1,5 +1,5 @@
 using Application.Features.Books.Commands;
-using Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using Application.UnitTests.TestDoubles;
 using ErrorOr;
 using LibraryApi.Domain.Entities;

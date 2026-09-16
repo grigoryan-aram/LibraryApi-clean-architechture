@@ -1,4 +1,4 @@
-﻿using Application.RepositoryInterfaces;
+﻿using LibraryApi.Domain.RepositoryInterfaces;
 using Application.ServiceInterfaces;
 using ErrorOr;
 using FluentEmail.MailKitSmtp;
@@ -7,7 +7,6 @@ using Infrastructure.Identity;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Infrastructure.Settings;
-using LibraryApi.Application.RepositoryInterfaces;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

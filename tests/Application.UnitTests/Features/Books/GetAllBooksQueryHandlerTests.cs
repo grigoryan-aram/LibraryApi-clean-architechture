@@ -1,5 +1,5 @@
 using Application.Features.Books.Queries;
-using Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;

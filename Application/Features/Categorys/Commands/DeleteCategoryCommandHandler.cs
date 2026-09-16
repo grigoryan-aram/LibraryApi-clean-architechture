@@ -1,4 +1,4 @@
-﻿using Application.RepositoryInterfaces;
+﻿using LibraryApi.Domain.RepositoryInterfaces;
 using ErrorOr;
 using MediatR;
 using Microsoft.Extensions.Logging;

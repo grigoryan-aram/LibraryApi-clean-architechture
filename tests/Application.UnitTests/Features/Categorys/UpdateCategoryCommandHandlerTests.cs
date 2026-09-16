@@ -1,5 +1,5 @@
 using Application.Features.Categorys.Commands;
-using Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using ErrorOr;
 using LibraryApi.Domain.Entities;
 using Microsoft.Extensions.Logging.Abstractions;

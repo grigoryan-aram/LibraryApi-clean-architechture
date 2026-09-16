@@ -143,7 +143,7 @@ Things that will bite:
 
 ## Data access
 
-Repository-per-aggregate. Interfaces in `Application/RepositoryInterfaces/`, EF Core implementations in `Infrastructure/Repositories/`. Conventions in the existing repos: reads use `AsNoTracking()`, deletes use `ExecuteDeleteAsync()` (no load-then-remove, so deleting a missing id is a silent no-op), every method takes a `CancellationToken`.
+Repository-per-aggregate. Interfaces in `Domain/RepositoryInterfaces/` (namespace `LibraryApi.Domain.RepositoryInterfaces`), EF Core implementations in `Infrastructure/Repositories/`. The interfaces sit in Domain rather than Application because a repository is part of the domain model — a collection of aggregates — and they reference nothing but Domain entities and the BCL, so Domain still has no dependencies at all. Conventions in the existing repos: reads use `AsNoTracking()`, deletes use `ExecuteDeleteAsync()` (no load-then-remove, so deleting a missing id is a silent no-op), every method takes a `CancellationToken`.
 
 `LibraryDBContext` (`Infrastructure/Data/LibraryDBContext.cs`) extends `IdentityDbContext<IdentityUser>`, declares relationships inline in `OnModelCreating`, then calls `ApplyConfigurationsFromAssembly`. The `IEntityTypeConfiguration` classes in `Infrastructure/Configurations/` mostly hold `HasData` seed rows (15 books — three of them with more than one copy, so availability is something other than a rephrased boolean out of the box — plus categories); `MembersConfiguration` holds no seed at all and exists for the unique index, and `BooksConfiguration` also carries the `TotalCopies >= 1` check constraint.
 
@@ -291,7 +291,7 @@ Do not "fix" this by setting `Secure` while the host is HTTP-only: the browser a
 
 ## Conventions and quirks worth knowing
 
-- Namespaces are inconsistent by layer: Domain entities are `LibraryApi.Domain.Entities` and the DbContext is `LibraryApi.Infrastructure.Data`, while Application/Infrastructure code uses bare `Application.*` / `Infrastructure.*`. One stray `LibraryApi.Application.RepositoryInterfaces` namespace exists. Match the file you are editing.
+- Namespaces are inconsistent by layer: Domain entities are `LibraryApi.Domain.Entities` and the DbContext is `LibraryApi.Infrastructure.Data`, while Application/Infrastructure code uses bare `Application.*` / `Infrastructure.*`. The repository interfaces moved to Domain and are now uniformly `LibraryApi.Domain.RepositoryInterfaces` — the stray `LibraryApi.Application.RepositoryInterfaces` that used to hold `IMembersRepository` alone is gone. Match the file you are editing.
 - Entities are suffixed `Model` (`BookModel`, `LoanModel`); DTOs are suffixed `DTO`.
 - "Category" is pluralised as **`Categorys`** throughout (folders, interfaces, queries), and its read folder is `Query/` while every other feature uses `Queries/`. Keep the existing spelling.
 - `Nullable` and `ImplicitUsings` are enabled in all six projects, test projects included.

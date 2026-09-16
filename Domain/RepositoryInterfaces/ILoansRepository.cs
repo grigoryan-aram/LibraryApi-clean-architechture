@@ -1,6 +1,6 @@
 using LibraryApi.Domain.Entities;
 
-namespace Application.RepositoryInterfaces
+namespace LibraryApi.Domain.RepositoryInterfaces
 {
     public interface ILoansRepository
     {

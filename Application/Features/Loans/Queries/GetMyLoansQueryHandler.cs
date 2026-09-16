@@ -1,7 +1,6 @@
 using Application.DTOs;
-using Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using ErrorOr;
-using LibraryApi.Application.RepositoryInterfaces;
 using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;

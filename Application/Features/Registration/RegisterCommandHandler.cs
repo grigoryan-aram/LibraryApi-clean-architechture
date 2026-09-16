@@ -4,7 +4,7 @@ using Application.Jobs;
 using Application.ServiceInterfaces;
 using ErrorOr;
 using Hangfire;
-using LibraryApi.Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;

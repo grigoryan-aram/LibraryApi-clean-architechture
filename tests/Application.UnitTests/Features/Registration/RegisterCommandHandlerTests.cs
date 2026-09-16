@@ -6,7 +6,7 @@ using ErrorOr;
 using Hangfire;
 using Hangfire.Common;
 using Hangfire.States;
-using LibraryApi.Application.RepositoryInterfaces;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Domain.Entities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
