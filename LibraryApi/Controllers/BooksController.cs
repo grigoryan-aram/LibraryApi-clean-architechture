@@ -35,7 +35,7 @@ public class BooksController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetBookById(int id)
+    public async Task<IActionResult> GetBookById([FromRoute] int id)
     {
         var result = await _mediator.Send(new GetBookByIdQuery(id));
 
@@ -46,7 +46,7 @@ public class BooksController : ControllerBase
 
 
     [HttpPost]
-    public async Task<IActionResult> AddBook(AddBookCommand command)
+    public async Task<IActionResult> AddBook([FromBody] AddBookCommand command)
     {
 
         var result = await _mediator.Send(command);
@@ -57,7 +57,7 @@ public class BooksController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateBook(int id, UpdateBookCommand command)
+    public async Task<IActionResult> UpdateBook([FromRoute] int id, [FromBody] UpdateBookCommand command)
     {
         var result = await _mediator.Send(command with { Id = id });
 
@@ -67,7 +67,7 @@ public class BooksController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteBook(int id)
+    public async Task<IActionResult> DeleteBook([FromRoute] int id)
     {
         var result = await _mediator.Send(new DeleteBookCommand(id));
 

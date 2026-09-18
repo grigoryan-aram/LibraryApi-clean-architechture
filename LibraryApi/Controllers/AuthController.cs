@@ -28,7 +28,7 @@ namespace LibraryApi.Controllers;
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register(RegisterDTO request)
+        public async Task<IActionResult> Register([FromBody] RegisterDTO request)
         {
             var result = await _mediator.Send(new RegisterCommand(
                 request.Username,
@@ -45,7 +45,7 @@ namespace LibraryApi.Controllers;
 
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginDTO dto)
+        public async Task<IActionResult> Login([FromBody] LoginDTO dto)
         {
             var result = await _signInManager.PasswordSignInAsync(
                 dto.Username,
