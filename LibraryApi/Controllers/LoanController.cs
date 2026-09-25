@@ -59,7 +59,7 @@ public class LoansController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetLoanById(int id)
+    public async Task<IActionResult> GetLoanById([FromRoute] int id)
     {
         var result = await _mediator.Send(new GetLoanByIdQuery(id));
 
@@ -69,7 +69,7 @@ public class LoansController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> AddLoan(AddLoanCommand command)
+    public async Task<IActionResult> AddLoan([FromBody] AddLoanCommand command)
     {
         var result = await _mediator.Send(command);
 
@@ -82,7 +82,7 @@ public class LoansController : ControllerBase
     // one named action on it, and the server supplies the only value that
     // changes.
     [HttpPost("{id}/return")]
-    public async Task<IActionResult> ReturnLoan(int id)
+    public async Task<IActionResult> ReturnLoan([FromRoute] int id)
     {
         var result = await _mediator.Send(new ReturnLoanCommand(id));
 
@@ -92,7 +92,7 @@ public class LoansController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteLoan(int id)
+    public async Task<IActionResult> DeleteLoan([FromRoute] int id)
     {
         var result = await _mediator.Send(new DeleteLoanCommand(id));
 

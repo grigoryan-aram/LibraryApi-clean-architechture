@@ -32,7 +32,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetCategoryById(int id)
+    public async Task<IActionResult> GetCategoryById([FromRoute] int id)
     {
         var result = await _mediator.Send(new GetCategoryByIdQuery(id));
 
@@ -42,7 +42,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> AddCategory(AddCategoryCommand command)
+    public async Task<IActionResult> AddCategory([FromBody] AddCategoryCommand command)
     {
         var result = await _mediator.Send(command);
 
@@ -52,7 +52,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateCategory(int id, UpdateCategoryCommand command)
+    public async Task<IActionResult> UpdateCategory([FromRoute] int id, [FromBody] UpdateCategoryCommand command)
     {
         var result = await _mediator.Send(command with { Id = id });
 
@@ -62,7 +62,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteCategory(int id)
+    public async Task<IActionResult> DeleteCategory([FromRoute] int id)
     {
         var result = await _mediator.Send(new DeleteCategoryCommand(id));
 

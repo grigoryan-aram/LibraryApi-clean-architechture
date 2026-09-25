@@ -7,14 +7,9 @@ namespace Application.Features.Categorys.Commands
     {
         public AddCategoryCommandValidator()
         {
-            RuleFor(x => x.title)
+            RuleFor(x => x.Name)
                 .NotEmpty().WithMessage("Category name is required.")
                 .MaximumLength(100).WithMessage("Category name cannot exceed 100 characters.");
-
-            RuleFor(x => x.id)
-                .GreaterThan(0).WithMessage("Category ID must be greater than 0.");
-                
-
         }
     }
 }

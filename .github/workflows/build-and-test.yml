@@ -1,0 +1,33 @@
+name: build-and-test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore LibraryApi.slnx
+
+      # No --warnaserror: the transitive MailKit/MimeKit NU1902 advisories
+      # cannot be fixed by a version override (FluentEmail.MailKit 3.0.2
+      # breaks at runtime against the patched releases), so failing on them
+      # would mean a permanently red build.
+      - name: Build
+        run: dotnet build LibraryApi.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test LibraryApi.slnx --no-build --configuration Release --verbosity normal

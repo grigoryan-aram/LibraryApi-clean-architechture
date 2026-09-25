@@ -1,6 +1,7 @@
 ﻿using Application.DTOs;
 using Application.ServiceInterfaces;
 using ErrorOr;
+using LibraryApi.Domain.Constants;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -9,10 +10,6 @@ namespace Application.Features.ClaudeAI.Queries
     public class AskClaudeQueryHandler
         : IRequestHandler<AskClaudeQuery, ErrorOr<ClaudeChatDTO>>
     {
-        // Every turn is resent to Claude on the next call, so an unbounded
-        // history means an unbounded bill. Oldest turns fall off first.
-        private const int MaxMessagesKept = 20;
-
         private readonly IClaudeService _claudeService;
         private readonly IChatHistoryStore _historyStore;
         private readonly IAiUsageLimiter _usageLimiter;
@@ -111,13 +108,13 @@ namespace Application.Features.ClaudeAI.Queries
         private static IReadOnlyList<ChatMessageDTO> Trim(
             List<ChatMessageDTO> conversation)
         {
-            if (conversation.Count <= MaxMessagesKept)
+            if (conversation.Count <= ChatHistory.MaxMessagesKept)
             {
                 return conversation;
             }
 
             return conversation
-                .Skip(conversation.Count - MaxMessagesKept)
+                .Skip(conversation.Count - ChatHistory.MaxMessagesKept)
                 .ToList();
         }
 

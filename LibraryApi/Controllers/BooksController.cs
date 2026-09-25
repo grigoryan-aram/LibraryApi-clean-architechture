@@ -24,10 +24,15 @@ public class BooksController : ControllerBase
     }
 
 
+    /// <summary>
+    /// Paged catalogue. Supports ?page=, ?pageSize= (max 100), ?search=
+    /// over title and author, ?sortBy=id|title|author|totalCopies and
+    /// ?descending=.
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetBooks()
+    public async Task<IActionResult> GetBooks([FromQuery] SearchBooksQuery query)
     {
-        var result = await _mediator.Send(new GetAllBooksQuery());
+        var result = await _mediator.Send(query);
 
         return result.Match(
             books => Ok(books),
@@ -35,7 +40,7 @@ public class BooksController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetBookById(int id)
+    public async Task<IActionResult> GetBookById([FromRoute] int id)
     {
         var result = await _mediator.Send(new GetBookByIdQuery(id));
 
@@ -46,7 +51,7 @@ public class BooksController : ControllerBase
 
 
     [HttpPost]
-    public async Task<IActionResult> AddBook(AddBookCommand command)
+    public async Task<IActionResult> AddBook([FromBody] AddBookCommand command)
     {
 
         var result = await _mediator.Send(command);
@@ -57,7 +62,7 @@ public class BooksController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateBook(int id, UpdateBookCommand command)
+    public async Task<IActionResult> UpdateBook([FromRoute] int id, [FromBody] UpdateBookCommand command)
     {
         var result = await _mediator.Send(command with { Id = id });
 
@@ -67,7 +72,7 @@ public class BooksController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteBook(int id)
+    public async Task<IActionResult> DeleteBook([FromRoute] int id)
     {
         var result = await _mediator.Send(new DeleteBookCommand(id));
 

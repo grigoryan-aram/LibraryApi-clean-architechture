@@ -3,6 +3,7 @@ using Application.ServiceInterfaces;
 using ErrorOr;
 using FluentEmail.MailKitSmtp;
 using Hangfire;
+using Hangfire.SqlServer;
 using Infrastructure.Identity;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
@@ -95,16 +96,23 @@ namespace Infrastructure.DependencyInjection
             });
 
 
-
+            // PrepareSchemaIfNecessary is off on purpose. Left on, Hangfire
+            // installs its schema while services are still being registered —
+            // before Program.cs calls Database.Migrate() — so against a brand
+            // new database the installer fails, gives up after its retries and
+            // never runs again, leaving every Enqueue for the life of the
+            // process throwing "Invalid object name 'HangFire.Job'". The schema
+            // is installed explicitly after Migrate() instead; see
+            // HangfireSchema.EnsureInstalled.
             services.AddHangfire(config =>
-    config.UseSqlServerStorage(
-        configuration.GetConnectionString("DefaultConnection")));
+                config.UseSqlServerStorage(
+                    connectionString,
+                    new SqlServerStorageOptions
+                    {
+                        PrepareSchemaIfNecessary = false
+                    }));
+
             services.AddHangfireServer();
-
-
-
-
-
             services.Configure<EmailSettings>(
             configuration.GetSection("Email"));
 

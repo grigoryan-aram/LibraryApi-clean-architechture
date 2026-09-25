@@ -32,7 +32,7 @@ public class MembersController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetMemberById(int id)
+    public async Task<IActionResult> GetMemberById([FromRoute] int id)
     {
         var result = await _mediator.Send(new GetMemberByIdQuery(id));
 
@@ -43,7 +43,7 @@ public class MembersController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> AddMember(AddMemberCommand command)
+    public async Task<IActionResult> AddMember([FromBody] AddMemberCommand command)
     {
         var result = await _mediator.Send(command);
 
@@ -53,7 +53,7 @@ public class MembersController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateMember(int id, UpdateMemberCommand command)
+    public async Task<IActionResult> UpdateMember([FromRoute] int id, [FromBody] UpdateMemberCommand command)
     {
         var result = await _mediator.Send(command with { Id = id });
 
@@ -63,7 +63,7 @@ public class MembersController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteMember(int id)
+    public async Task<IActionResult> DeleteMember([FromRoute] int id)
     {
         var result = await _mediator.Send(new DeleteMemberCommand(id));
 
