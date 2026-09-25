@@ -8,7 +8,7 @@
 
 	<ItemGroup>
 	
-		<PackageReference Include="Anthropic" Version="12.42.0" />
+		<PackageReference Include="Anthropic" Version="12.49.0" />
 	
 		<PackageReference Include="FluentEmail.Core" Version="3.0.2" />
 		<PackageReference Include="FluentEmail.MailKit" Version="3.0.2" />
@@ -18,21 +18,21 @@
 		     (MailTransport.SendAsync changed signature), and 3.0.2 is the last
 		     release, so a version override cannot fix this. Replacing the sender
 		     is the only route. -->
-		<PackageReference Include="Hangfire" Version="1.8.24" />
+		<PackageReference Include="Hangfire" Version="1.8.25" />
 		
 
 		
-		<PackageReference Include="Mapster" Version="10.0.11" />
+		<PackageReference Include="Mapster" Version="10.0.12" />
 		
 
 		
-		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
 	</ItemGroup>
 
 	<ItemGroup>
