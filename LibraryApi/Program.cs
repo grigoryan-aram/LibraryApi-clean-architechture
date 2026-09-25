@@ -8,9 +8,9 @@ using LibraryApi.MiddleWares;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Cors.Infrastructure;
 
 
+    
 var builder = WebApplication.CreateBuilder(args);
 
 
@@ -72,7 +72,6 @@ builder.Services.ConfigureApplicationCookie(options =>
         ? CookieSecurePolicy.Always
         : CookieSecurePolicy.SameAsRequest;
 });
-
 
 
 
