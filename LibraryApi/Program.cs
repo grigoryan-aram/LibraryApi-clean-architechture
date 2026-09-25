@@ -1,13 +1,17 @@
 using Application.DependencyInjection;
 using Hangfire;
+using Infrastructure;
 using Infrastructure.DependencyInjection;
 using Infrastructure.Identity;
 using LibraryApi.Components;
+using LibraryApi.HealthChecks;
 using LibraryApi.Extensions;
 using LibraryApi.MiddleWares;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 
     
@@ -21,6 +25,27 @@ if (builder.Environment.IsProduction())
         .AddEnvironmentVariables();
 }
 
+// Serilog replaces the default console-only provider. Levels come from the
+// "Serilog" section; the rolling file is what makes the handler logging
+// usable on a host where nobody can watch stdout.
+builder.Services.AddSerilog((services, logging) => logging
+    .ReadFrom.Configuration(builder.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: Path.Combine(builder.Environment.ContentRootPath, "logs", "library-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 14,
+        // SourceContext is the logger category — the handler that wrote the
+        // line. Without it the file says what happened but not where, which
+        // is most of what a per-handler logger is for.
+        outputTemplate:
+            "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext}: " +
+            "{Message:lj}{NewLine}{Exception}",
+        // IIS can run more than one worker process against the same folder.
+        shared: true));
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -31,13 +56,32 @@ builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter("fixed", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = 100;
-        limiterOptions.Window = TimeSpan.FromMinutes(2);
-        limiterOptions.QueueLimit = 10;
-    });
+    // 429, not the default 503: the caller sent too many requests, the
+    // service is not unavailable.
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Partitioned per caller. AddFixedWindowLimiter would give every client
+    // in the world one shared bucket of 100, so a single busy caller could
+    // lock everyone else out. Signed-in callers are keyed by name; everyone
+    // else by remote address.
+    options.AddPolicy("fixed", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.Identity?.Name
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(2),
+                // No queue: a rate-limited caller gets an immediate 429 rather
+                // than a request held open for up to a whole window. Queuing
+                // suits a worker draining a backlog, not an HTTP API.
+                QueueLimit = 0
+            }));
 });
+
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddApplication();
 
@@ -97,8 +141,6 @@ else
         "Set it back to true once the host has a TLS certificate.");
 }
 
-app.UseRateLimiter();
-
 // Unconditional, because [EnableCors] on the controllers is unconditional.
 // Nested inside "if (requireHttps) / if (!IsDevelopment())" it never ran in
 // Production — Security:RequireHttps is false there — and an endpoint that
@@ -117,6 +159,12 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// After authentication on purpose: the policy partitions on the signed-in
+// user name, which is not populated until UseAuthentication has run.
+app.UseRateLimiter();
+
+app.UseSerilogRequestLogging();
 
 // Deliberately AFTER authentication: mapped before it, the dashboard was
 // reachable by anyone who knew the URL. The filter now asks for the Admin
@@ -139,7 +187,11 @@ app.UseAdminOnlyPath("/swagger");
 app.UseSwagger();
 app.UseSwaggerUI();
 app.MapStaticAssets();
-app.MapControllers();
+app.MapControllers().RequireRateLimiting("fixed");
+
+// Anonymous on purpose: a probe that needs a cookie cannot be used by the
+// host. It reports reachability only, never a connection string or a version.
+app.MapHealthChecks("/health");
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 using (var scope = app.Services.CreateScope())
@@ -147,6 +199,26 @@ using (var scope = app.Services.CreateScope())
     var dbContext = scope.ServiceProvider.GetRequiredService<LibraryDBContext>();
 
     dbContext.Database.Migrate();
+
+    // After Migrate(), which is what creates the database on a first run.
+    // Hangfire can no longer install this itself — see the comment on
+    // PrepareSchemaIfNecessary in AddInfrastructure.
+    //
+    // Logged rather than fatal: a host whose SQL login has no DDL rights can
+    // still serve every request, and registration already degrades when the
+    // enqueue fails. A silent failure here would leave background jobs broken
+    // forever with nothing to explain it, so it is loud.
+    try
+    {
+        HangfireSchema.EnsureInstalled(dbContext.Database.GetDbConnection());
+    }
+    catch (Exception exception)
+    {
+        app.Logger.LogError(
+            exception,
+            "Could not install the Hangfire schema. Background jobs will fail " +
+            "until this is resolved.");
+    }
 
     // Roles and the seed administrator. Has to come after Migrate() — it
     // writes to the Identity tables the migrations create — and it is

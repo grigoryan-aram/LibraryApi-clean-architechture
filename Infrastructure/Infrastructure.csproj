@@ -18,7 +18,7 @@
 		     (MailTransport.SendAsync changed signature), and 3.0.2 is the last
 		     release, so a version override cannot fix this. Replacing the sender
 		     is the only route. -->
-		<PackageReference Include="Hangfire" Version="1.8.24" />
+		<PackageReference Include="Hangfire" Version="1.8.25" />
 		
 
 		

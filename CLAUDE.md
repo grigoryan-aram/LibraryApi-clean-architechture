@@ -56,13 +56,13 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (127 tests across three projects, all passing):
+Test (210 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
 ```
 
-`dotnet build` and `dotnet test` are the only automated checks — there is no CI workflow. See **Keeping tests current** below before changing code.
+`.github/workflows/build-and-test.yml` runs `dotnet restore/build/test` in Release on every push and pull request to `main`, on `ubuntu-latest`. It deliberately does not pass `--warnaserror`: the transitive MailKit/MimeKit NU1902 advisories cannot be fixed by a version override, so failing on them would mean a permanently red build. See **Keeping tests current** below before changing code.
 
 ## Keeping tests current
 
@@ -92,7 +92,21 @@ Controller → MediatR → handler → repository/service. Every step is thin an
 4. **Handler** — injects a repository or service interface, returns `Error.NotFound`/`Error.Failure`/etc. on the sad path instead of throwing.
 5. **Mapping** — Mapster convention-based `.Adapt<T>()`. There is no Mapster config/profile; mapping relies on matching member names, so renaming a DTO or entity property silently breaks the mapping.
 
-`ErrorExtensions.ToProblem` (`LibraryApi/Extensions/ErrorExtensions.cs`) maps all-validation error lists to a 400 `ValidationProblemDetails` and **everything else to a 400 as well** — `Error.NotFound` currently surfaces as 400, not 404.
+`ErrorExtensions.ToProblem` (`LibraryApi/Extensions/ErrorExtensions.cs`) maps all-validation error lists to a 400 `ValidationProblemDetails`, and everything else through `StatusCodeFor`: **NotFound → 404, Conflict → 409, Unauthorized → 401, Forbidden → 403, Unexpected → 500**. `ErrorType.Failure` still answers **400** — it is ErrorOr's catch-all and this codebase leans on it for a mixture of causes (a missing Claude API key, a spent allowance, a repository that saved no row), several of which are really 500s or a 429. Those are mislabelled at the source rather than in the mapping, so retyping the errors is the fix. `StatusCodeFor` is a separate public method precisely so the mapping can be tested without a ControllerBase and a ProblemDetailsFactory.
+
+## Listing, paging and search
+
+`GET /api/Books` is **paged**. It binds `SearchBooksQuery` from the query string — `?page=` (1-based), `?pageSize=` (1-100, default 20), `?search=` over title and author, `?sortBy=id|title|author|totalCopies`, `?descending=` — and answers a `PagedResult<BooksDTO>` carrying `items`, `page`, `pageSize`, `totalCount`, plus computed `totalPages`, `hasPreviousPage` and `hasNextPage`. Those three are get-only members for the same reason `LoansDTO.IsOverdue` is: Mapster fills constructor parameters and leaves them alone, so they cannot drift out of step with `totalCount`.
+
+Filtering, ordering and paging all happen in SQL, in `BooksRepository.SearchAsync`. Three things there are deliberate: the count is taken **before** `Skip`/`Take`, or it would report how many rows came back rather than how many matched; the query is **always ordered by something**, because `Skip`/`Take` over an unordered query has no defined row order in SQL Server and page 2 could legally repeat a row from page 1; and the sort key goes through a **`switch`, never a dynamic property lookup** — it arrives from the query string, and building an expression from caller-supplied text is how an ordering parameter becomes an injection surface. Unknown sort keys never reach the repository because `SearchBooksQueryValidator` rejects them rather than silently falling back to default order.
+
+**`GetAllBooksQuery` still exists and is still unpaged**, because `Books.razor`, `Categories.razor` and `Loans.razor` send it in-process to fill dropdowns and genuinely do want every book. Anything crossing HTTP should use `SearchBooksQuery` instead.
+
+## Health and logging
+
+`GET /health` is anonymous and not rate limited, and runs `DatabaseHealthCheck` — one `CanConnectAsync`, hand-written rather than pulling in the EF Core health-check package, because a probe that answers Healthy while SQL Server is unreachable is worse than no probe. It reports reachability only, never a connection string or a version.
+
+Logging is **Serilog** (`Serilog.AspNetCore`), console plus a daily rolling file under `<content root>/logs/library-.log`, 14 files retained, `shared: true` because IIS can run more than one worker process against the same folder. Levels come from the **`Serilog`** section of `appsettings.json`, not `Logging:LogLevel` — `Microsoft.EntityFrameworkCore` is overridden to Warning there, which is what stops every request drowning in `Executed DbCommand`. The file template includes `{SourceContext}` so a line says which handler wrote it; without that the per-handler loggers tell you what happened but not where. `app.UseSerilogRequestLogging()` collapses the framework's several-lines-per-request into one.
 
 ## Adding a feature slice
 
@@ -202,7 +216,7 @@ Two things that will look like bugs and are not:
 
 ## Background jobs and email
 
-Hangfire (`Infrastructure/DependencyInjection.cs`) uses SQL Server storage on the same `DefaultConnection` and auto-creates its own schema. `AddHangfireServer()` means jobs run in-process. `app.UseHangfireDashboard("/hangfire", …)` is mapped in `LibraryApi/Program.cs` **after** `UseAuthentication()`/`UseAuthorization()` and carries a `HangfireDashboardAuthorization` filter (`LibraryApi/Extensions/`) that requires the **`Admin`** role — see **Roles** above; everyone else gets a 401. It used to sit before the auth middleware with no filter, which left the dashboard, and every job argument in it, open to anyone with the URL. Keep it where it is.
+Hangfire (`Infrastructure/DependencyInjection.cs`) uses SQL Server storage on the same `DefaultConnection`. **`PrepareSchemaIfNecessary` is off**: left on, Hangfire installs its schema while services are still being registered — before `Database.Migrate()` has created the database — and once its retries are exhausted it never tries again, so every `Enqueue` for the life of that process throws `Invalid object name 'HangFire.Job'`. `HangfireSchema.EnsureInstalled` runs straight after `Migrate()` instead, and is handed **the DbContext's own connection**: a fresh `SqlConnection` fails there too, because Hangfire's earlier probe has already put SqlClient's pool into its failure-blocking period. The call is wrapped in a try/catch that logs rather than throws — a host whose SQL login lacks DDL rights can still serve every request. `AddHangfireServer()` means jobs run in-process. `app.UseHangfireDashboard("/hangfire", …)` is mapped in `LibraryApi/Program.cs` **after** `UseAuthentication()`/`UseAuthorization()` and carries a `HangfireDashboardAuthorization` filter (`LibraryApi/Extensions/`) that requires the **`Admin`** role — see **Roles** above; everyone else gets a 401. It used to sit before the auth middleware with no filter, which left the dashboard, and every job argument in it, open to anyone with the URL. Keep it where it is.
 
 Email is FluentEmail + MailKit, configured from the `Email` config section (also bound to `Infrastructure/Settings/EmailSettings`).
 
@@ -251,10 +265,10 @@ Four things here will waste your time if you do not know them:
 
 ## Rate limiting
 
-Three mechanisms. Only the third actually limits anything:
+Two live mechanisms, plus one that has been deleted:
 
-- The built-in fixed-window limiter named `"fixed"` is registered and `UseRateLimiter()` is called, but no endpoint carries `[EnableRateLimiting("fixed")]`.
-- `LibraryApi/MiddleWares/RateLimitPerIPMiddleWare.cs` is never added to the pipeline (and its `static Dictionary` counter is not thread-safe and never resets).
+- **The `"fixed"` policy caps the API at 100 requests per caller per 2 minutes.** Applied with `app.MapControllers().RequireRateLimiting("fixed")`, so it covers the API controllers and deliberately not `/health`, the Blazor circuit or static assets. It is a **partitioned** policy, not `AddFixedWindowLimiter`: that overload gives every client in the world one shared bucket, so a single busy caller could lock everyone else out. The key is the signed-in user name, falling back to the remote address — which is why `app.UseRateLimiter()` sits **after** `UseAuthentication()`, since the name is not populated before it. `QueueLimit` is **0** on purpose: a rate-limited caller gets an immediate 429 rather than a request held open for up to a whole window. Measured: request 101 onwards answers 429, and `/health` keeps answering 200.
+- The dead `RateLimitPerIPMiddleWare` has been deleted. It was never added to the pipeline, and its `static Dictionary` counter was neither thread-safe nor ever reset.
 - **`IAiUsageLimiter` caps Claude at one message per user per 24 hours** (`Claude:RateLimitHours`, 0 disables). `InMemoryAiUsageLimiter` keys an `IMemoryCache` entry on the requester with an absolute expiry.
 
 That last one deliberately sits **in `AskClaudeQueryHandler`, not on the endpoint**. ASP.NET Core's rate limiter only sees HTTP requests, and the Blazor chat page calls `IMediator` in-process — an `[EnableRateLimiting]` attribute would have limited curl while leaving the UI unlimited. Putting it behind the handler covers both entry points, which is the whole point.

@@ -124,7 +124,7 @@
         _error = null;
 
         // Id 0 - the database assigns the real one on insert.
-        var result = await Mediator.Send(new AddCategoryCommand(0, _newName.Trim()));
+        var result = await Mediator.Send(new AddCategoryCommand(_newName.Trim()));
 
         if (result.IsError)
         {

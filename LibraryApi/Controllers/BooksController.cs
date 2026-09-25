@@ -24,10 +24,15 @@ public class BooksController : ControllerBase
     }
 
 
+    /// <summary>
+    /// Paged catalogue. Supports ?page=, ?pageSize= (max 100), ?search=
+    /// over title and author, ?sortBy=id|title|author|totalCopies and
+    /// ?descending=.
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetBooks()
+    public async Task<IActionResult> GetBooks([FromQuery] SearchBooksQuery query)
     {
-        var result = await _mediator.Send(new GetAllBooksQuery());
+        var result = await _mediator.Send(query);
 
         return result.Match(
             books => Ok(books),

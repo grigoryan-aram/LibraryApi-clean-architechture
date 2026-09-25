@@ -32,7 +32,7 @@ namespace Application.Features.Categorys.Commands
             {
                 _logger.LogError(
                     "The categorys repository returned no row when adding {Title}.",
-                    request.title);
+                    request.Name);
 
                 return Error.Failure("Category.Add", "Failed to add category");
             }
