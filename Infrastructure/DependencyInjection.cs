@@ -96,7 +96,6 @@ namespace Infrastructure.DependencyInjection
             });
 
 
-
             // PrepareSchemaIfNecessary is off on purpose. Left on, Hangfire
             // installs its schema while services are still being registered —
             // before Program.cs calls Database.Migrate() — so against a brand
@@ -114,11 +113,6 @@ namespace Infrastructure.DependencyInjection
                     }));
 
             services.AddHangfireServer();
-
-
-
-
-
             services.Configure<EmailSettings>(
             configuration.GetSection("Email"));
 
