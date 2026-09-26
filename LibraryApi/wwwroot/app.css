@@ -1332,3 +1332,36 @@ a {
         font-size: 11.5px;
     }
 }
+
+/* ---------- password reset panel ---------- */
+
+.panel-reset {
+    margin-top: 18px;
+}
+
+.panel-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.step-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+
+.link-quiet {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.link-quiet:hover {
+    color: var(--text);
+}

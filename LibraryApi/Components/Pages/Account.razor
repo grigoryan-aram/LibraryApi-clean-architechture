@@ -84,6 +84,8 @@
 
                         <button class="btn btn-primary btn-block" type="submit">Sign in</button>
                     </EditForm>
+
+                    <a class="link-quiet" href="account#reset">Forgotten your password?</a>
                 </div>
 
                 <div class="panel">
@@ -136,6 +138,91 @@
                 </div>
 
             </div>
+
+            <div class="panel panel-single panel-reset" id="reset">
+                <span class="panel-glyph">⟲</span>
+                <h2>Forgotten your password?</h2>
+
+                @if (_resetErrors.Count > 0)
+                {
+                    <div class="alert alert-error" role="alert">
+                        @foreach (var error in _resetErrors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                @if (_forgotMessage is not null)
+                {
+                    <div class="alert alert-ok" role="status">@_forgotMessage</div>
+                }
+
+                @if (_resetSuccess is not null)
+                {
+                    <div class="alert alert-ok" role="status">@_resetSuccess</div>
+                }
+
+                @* Both steps are always on the page rather than one replacing
+                   the other: this form is static-SSR, so a step that only
+                   appeared after the first post would be lost on a refresh —
+                   and someone returning with a code already in their inbox
+                   would have no way back to it. *@
+                <div class="panel-steps">
+                    <div>
+                        <span class="step-label">Step one — get a code</span>
+
+                        <EditForm Model="ForgotModel" FormName="forgot-password"
+                                  OnValidSubmit="RequestCodeAsync" method="post">
+                            <DataAnnotationsValidator />
+
+                            <label class="field">
+                                <span>Email</span>
+                                <InputText @bind-Value="ForgotModel!.Email" autocomplete="email" />
+                                <ValidationMessage For="() => ForgotModel!.Email" />
+                            </label>
+
+                            <button class="btn btn-ghost btn-block" type="submit">Email me a code</button>
+                        </EditForm>
+                    </div>
+
+                    <div>
+                        <span class="step-label">Step two — use it</span>
+
+                        <EditForm Model="ResetModel" FormName="reset-password"
+                                  OnValidSubmit="ResetPasswordAsync" method="post">
+                            <DataAnnotationsValidator />
+
+                            <label class="field">
+                                <span>Email</span>
+                                <InputText @bind-Value="ResetModel!.Email" autocomplete="email" />
+                                <ValidationMessage For="() => ResetModel!.Email" />
+                            </label>
+
+                            <label class="field">
+                                <span>Code from the email</span>
+                                <InputText @bind-Value="ResetModel!.Code" autocomplete="one-time-code"
+                                           placeholder="VK35oeQ" />
+                                <ValidationMessage For="() => ResetModel!.Code" />
+                            </label>
+
+                            <label class="field">
+                                <span>New password</span>
+                                <InputText type="password" @bind-Value="ResetModel!.NewPassword"
+                                           autocomplete="new-password" />
+                                <ValidationMessage For="() => ResetModel!.NewPassword" />
+                            </label>
+
+                            <button class="btn btn-primary btn-block" type="submit">Change my password</button>
+                        </EditForm>
+                    </div>
+                </div>
+
+                <p class="fineprint muted">
+                    The code lasts @PasswordResetRules.ExpiryMinutes minutes, works once, and
+                    allows @PasswordResetRules.MaxAttempts tries. Capital letters do not matter.
+                </p>
+            </div>
         </NotAuthorized>
     </AuthorizeView>
 
@@ -154,16 +241,27 @@
     [SupplyParameterFromForm(FormName = "register")]
     private RegisterInput? RegisterModel { get; set; }
 
+    [SupplyParameterFromForm(FormName = "forgot-password")]
+    private ForgotInput? ForgotModel { get; set; }
+
+    [SupplyParameterFromForm(FormName = "reset-password")]
+    private ResetInput? ResetModel { get; set; }
+
     protected override void OnInitialized()
     {
         // ??= not =, so a bound model survives: this runs after binding.
         LoginModel ??= new LoginInput();
         RegisterModel ??= new RegisterInput();
+        ForgotModel ??= new ForgotInput();
+        ResetModel ??= new ResetInput();
     }
 
     private string? _loginError;
     private string? _registerSuccess;
     private List<string> _registerErrors = [];
+    private string? _forgotMessage;
+    private string? _resetSuccess;
+    private List<string> _resetErrors = [];
 
     private async Task SignInAsync()
     {
@@ -202,6 +300,51 @@
         RegisterModel = new RegisterInput();
     }
 
+    private async Task RequestCodeAsync()
+    {
+        _resetErrors = [];
+        _resetSuccess = null;
+        _forgotMessage = null;
+
+        var result = await Mediator.Send(new ForgotPasswordCommand(ForgotModel!.Email));
+
+        if (result.IsError)
+        {
+            _resetErrors = result.Errors.Select(error => error.Description).ToList();
+            return;
+        }
+
+        // The same sentence whatever the address, because the handler behaves
+        // the same way — saying "we sent it" only for real accounts would give
+        // the page away as an account-enumeration tool.
+        _forgotMessage =
+            $"If that address has an account, a code is on its way. " +
+            $"It expires in {PasswordResetRules.ExpiryMinutes} minutes.";
+
+        ResetModel!.Email = ForgotModel!.Email;
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        _resetErrors = [];
+        _resetSuccess = null;
+        _forgotMessage = null;
+
+        var result = await Mediator.Send(new ResetPasswordCommand(
+            ResetModel!.Email,
+            ResetModel!.Code,
+            ResetModel!.NewPassword));
+
+        if (result.IsError)
+        {
+            _resetErrors = result.Errors.Select(error => error.Description).ToList();
+            return;
+        }
+
+        _resetSuccess = "Password changed. Sign in with your new password.";
+        ResetModel = new ResetInput();
+    }
+
     private async Task SignOutAsync()
     {
         await SignInManager.SignOutAsync();
@@ -215,6 +358,29 @@
 
         [Required(ErrorMessage = "Password is required.")]
         public string Password { get; set; } = string.Empty;
+    }
+
+    private sealed class ForgotInput
+    {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "That does not look like an email address.")]
+        public string Email { get; set; } = string.Empty;
+    }
+
+    private sealed class ResetInput
+    {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "That does not look like an email address.")]
+        public string Email { get; set; } = string.Empty;
+
+        // No length rule here. ResetPasswordCommandValidator owns it, and two
+        // copies of the number would drift the day the code length changes.
+        [Required(ErrorMessage = "The code from the email is required.")]
+        public string Code { get; set; } = string.Empty;
+
+        // Strength is Identity's to judge, for the same reason.
+        [Required(ErrorMessage = "A new password is required.")]
+        public string NewPassword { get; set; } = string.Empty;
     }
 
     private sealed class RegisterInput
