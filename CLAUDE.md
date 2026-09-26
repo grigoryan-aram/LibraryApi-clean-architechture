@@ -171,7 +171,14 @@ ASP.NET Core Identity with `IdentityUser`/`IdentityRole` and **cookie** auth (`A
 
 `[Authorize]` sits at class level on the Books, Category, Loan, and Members controllers; `AuthController` is anonymous.
 
-`AuthController.Login` calls `SignInManager.PasswordSignInAsync` directly, bypassing MediatR. The parallel `Application/Features/Login/` slice and `IIdentityService.LoginAsync` implement the same thing and are currently unreferenced — if you touch login, pick one path rather than editing both.
+**There is one login implementation and everything goes through it.** `AuthController.Login` and `Login.razor` both send `LoginCommand` → `LoginCommandHandler` → `IIdentityService.LoginAsync` → `SignInManager.PasswordSignInAsync`. The controller no longer injects `SignInManager` at all. `Application/Features/Login/` used to be a parallel, unreferenced copy while the controller called `SignInManager` directly; that duplication is gone.
+
+Two consequences of routing login through MediatR, both deliberate:
+
+- **A bad password answers 401, not 400.** `IdentityService.LoginAsync` returns `Error.Unauthorized`, which `StatusCodeFor` maps to 401; the controller used to hand-build an `Error.Validation` and get a 400. 401 is the right answer for a rejected credential, but it is a change for any client checking the old status.
+- **`LoginCommandValidator` checks presence only.** It used to require a six-character password, which is the wrong place for a length rule twice over: an account whose password predates a policy change could never sign in again, and a short password came back as "must be at least 6 characters" instead of the same refusal every other bad credential gets.
+
+Signing in from a Razor page still writes the cookie, because `SignInManager` reaches the current request through `IHttpContextAccessor` — which is what `AddHttpContextAccessor()` in `Program.cs` is for. Running it inside a MediatR handler does not change that; it is the same DI scope and the same `HttpContext`.
 
 ### Members and accounts
 
@@ -195,6 +202,17 @@ An Identity account and a library member are separate, joined by **`MemberModel.
 - **`forgot-password` returns Success even when the code cannot be stored or queued**, for the same reason, and logs at Error instead. A failure there is invisible to the caller by design.
 - Identity keeps ownership of password strength; its complaints pass through and leave the code usable for a retry.
 - Codes are generated from mixed-case alphanumerics, so `O`/`0` and `1`/`I` can both appear. Dropping `0O1lI` from the alphabet is the fix if transcription errors ever become a complaint.
+
+### Staying signed in
+
+`LoginDTO.RememberMe` and the "Keep me signed in" checkbox on `/login` both feed `SignInManager.PasswordSignInAsync(..., isPersistent:)`. `RememberMe` defaults to **false**, so an existing API caller that omits it keeps the old behaviour.
+
+The flag decides only whether the **browser** keeps the cookie across a restart — ticked it carries `expires`, unticked it is a session cookie (both measured on the `Set-Cookie`). The **ticket's** lifetime is `ExpireTimeSpan` in `ConfigureApplicationCookie`, set explicitly to **14 days, sliding**, so the number lives here rather than in a framework default.
+
+Two consequences worth knowing:
+
+- **On an HTTP-only deployment a persistent cookie is a 14-day bearer credential in clear text**, written to disk rather than dying with the browser. `Security:RequireHttps` is false in production (see **Transport security**), so the checkbox widens an existing exposure rather than creating a new one — but it does widen it.
+- **The flag reaches `isPersistent` only through `LoginCommandHandler`.** Both entry points send the command, so there is one place to change and one place to test.
 
 ### Roles
 

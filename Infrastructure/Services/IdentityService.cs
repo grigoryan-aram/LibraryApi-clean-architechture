@@ -24,12 +24,16 @@ namespace Infrastructure.Services
             _logger = logger;
         }
 
-        public async Task<ErrorOr<LoginResponseDTO>> LoginAsync(string username, string password, CancellationToken cancellationToken)
+        public async Task<ErrorOr<LoginResponseDTO>> LoginAsync(
+            string username,
+            string password,
+            bool rememberMe,
+            CancellationToken cancellationToken)
         {
             var result = await _signInManager.PasswordSignInAsync(
                  username,
                  password,
-                 isPersistent: false,
+                 isPersistent: rememberMe,
                  lockoutOnFailure: false);
 
             if (!result.Succeeded)

@@ -1,11 +1,10 @@
 ﻿using Application.DTOs;
+using Application.Features.Login.Commands;
 using Application.Features.PasswordReset;
 using Application.Features.Registration;
-using ErrorOr;
 using LibraryApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Cors;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 
@@ -17,15 +16,10 @@ namespace LibraryApi.Controllers;
     public class AuthController : ControllerBase
     {
         private readonly IMediator _mediator;
-        private readonly SignInManager<IdentityUser> _signInManager;
 
-        public AuthController(
-            IMediator mediator,
-            SignInManager<IdentityUser> signInManager)
+        public AuthController(IMediator mediator)
         {
             _mediator = mediator;
-            _signInManager = signInManager;
-
         }
 
         [HttpPost("register")]
@@ -48,28 +42,17 @@ namespace LibraryApi.Controllers;
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO dto)
         {
-            var result = await _signInManager.PasswordSignInAsync(
+            var result = await _mediator.Send(new LoginCommand(
                 dto.Username,
                 dto.Password,
-                isPersistent: false,
-                lockoutOnFailure: false);
+                dto.RememberMe));
 
-            if (result.Succeeded)
-            {
-                return Ok(new
+            return result.Match(
+                response => Ok(new
                 {
-                    Message = "Login successful"
-                });
-            }
-
-            var errors = new List<Error>
-    {
-        Error.Validation(
-            "Auth.InvalidCredentials",
-            "Invalid username or password.")
-    };
-
-            return this.ToProblem(errors);
+                    Message = response.Message
+                }),
+                errors => this.ToProblem(errors));
         }
 
         /// <summary>

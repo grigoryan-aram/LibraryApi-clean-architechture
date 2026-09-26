@@ -109,6 +109,16 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Lax;
 
+    // How long "Keep me signed in" lasts. Set explicitly rather than left to
+    // Identity's default so the answer is here rather than in a framework
+    // release note. Sliding, so an active user is not signed out mid-use.
+    //
+    // This is the ticket's lifetime either way; the checkbox decides whether
+    // the browser also keeps the cookie across a restart. Without it the
+    // cookie is a session cookie and dies with the browser.
+    options.ExpireTimeSpan = TimeSpan.FromDays(14);
+    options.SlidingExpiration = true;
+
     // Secure would make the cookie unusable on an HTTP-only host: the browser
     // would accept it and never send it back, so sign-in would fail with no
     // error to explain why.

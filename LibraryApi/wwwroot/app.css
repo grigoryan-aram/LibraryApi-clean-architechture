@@ -1410,3 +1410,7 @@ a {
 .account .panel-links {
     justify-content: center;
 }
+
+.account .checkbox-row {
+    margin-bottom: 14px;
+}

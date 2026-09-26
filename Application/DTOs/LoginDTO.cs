@@ -1,6 +1,7 @@
-﻿namespace Application.DTOs
+namespace Application.DTOs
 {
     public record LoginDTO(
         string Username,
-        string Password);
+        string Password,
+        bool RememberMe = false);
 }

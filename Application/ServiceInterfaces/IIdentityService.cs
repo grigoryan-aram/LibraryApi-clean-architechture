@@ -19,6 +19,7 @@ namespace Application.ServiceInterfaces
         Task<ErrorOr<LoginResponseDTO>> LoginAsync(
             string username,
             string password,
+            bool rememberMe,
             CancellationToken cancellationToken);
 
         // Null rather than an error for an address with no account: the

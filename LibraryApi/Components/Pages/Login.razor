@@ -1,8 +1,8 @@
 @page "/login"
 
 @using System.ComponentModel.DataAnnotations
-@using Microsoft.AspNetCore.Identity
-@inject SignInManager<IdentityUser> SignInManager
+@using global::Application.Features.Login.Commands
+@inject IMediator Mediator
 @inject NavigationManager Nav
 
 @* Deliberately NOT interactive. Signing in writes an auth cookie, and a
@@ -58,6 +58,11 @@
                         <ValidationMessage For="() => LoginModel!.Password" />
                     </label>
 
+                    <label class="checkbox checkbox-row">
+                        <InputCheckbox @bind-Value="LoginModel!.RememberMe" />
+                        <span>Keep me signed in</span>
+                    </label>
+
                     <button class="btn btn-primary btn-block" type="submit">Sign in</button>
                 </EditForm>
 
@@ -89,15 +94,18 @@
 
     private async Task SignInAsync()
     {
-        var result = await SignInManager.PasswordSignInAsync(
+        // Through MediatR, so this page and POST /api/Auth/login run the same
+        // handler. The auth cookie is still written: SignInManager reaches the
+        // current request through IHttpContextAccessor, which is why
+        // Program.cs registers it.
+        var result = await Mediator.Send(new LoginCommand(
             LoginModel!.Username,
             LoginModel!.Password,
-            isPersistent: false,
-            lockoutOnFailure: false);
+            LoginModel!.RememberMe));
 
-        if (!result.Succeeded)
+        if (result.IsError)
         {
-            _loginError = "Invalid username or password.";
+            _loginError = result.FirstError.Description;
             return;
         }
 
@@ -111,5 +119,7 @@
 
         [Required(ErrorMessage = "Password is required.")]
         public string Password { get; set; } = string.Empty;
+
+        public bool RememberMe { get; set; }
     }
 }
