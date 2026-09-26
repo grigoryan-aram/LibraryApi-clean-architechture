@@ -102,7 +102,7 @@ var requireHttps = builder.Configuration.GetValue("Security:RequireHttps", true)
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.LoginPath = "/account";
+    options.LoginPath = "/login";
     options.LogoutPath = "/account";
     options.AccessDeniedPath = "/account";
 

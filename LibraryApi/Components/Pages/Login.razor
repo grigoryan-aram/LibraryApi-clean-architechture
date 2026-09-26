@@ -1,0 +1,115 @@
+@page "/login"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
+@inject NavigationManager Nav
+
+@* Deliberately NOT interactive. Signing in writes an auth cookie, and a
+   Blazor circuit has no response left to write headers on — so this is a
+   plain static-SSR post. Do not add @@rendermode. *@
+
+<PageTitle>Sign in — Athenaeum</PageTitle>
+
+<section class="account">
+
+    <header class="account-head">
+        <h1>Sign in</h1>
+        <p class="muted">
+            The cookie minted here is the same one <code>/api/Auth/login</code>
+            issues — it authorises the API, Swagger and the chat circuit alike.
+        </p>
+    </header>
+
+    <AuthorizeView Context="auth">
+        <Authorized>
+            <div class="panel panel-single">
+                <span class="panel-glyph">✓</span>
+                <h2>Already signed in as @auth.User.Identity?.Name</h2>
+
+                <div class="panel-actions">
+                    <a class="btn btn-primary" href="account">Your account</a>
+                    <a class="btn btn-ghost" href="chat">Go to the chat</a>
+                </div>
+            </div>
+        </Authorized>
+
+        <NotAuthorized>
+            <div class="panel panel-single">
+                <span class="panel-glyph">→</span>
+
+                @if (_loginError is not null)
+                {
+                    <div class="alert alert-error" role="alert">@_loginError</div>
+                }
+
+                <EditForm Model="LoginModel" FormName="login" OnValidSubmit="SignInAsync" method="post">
+                    <DataAnnotationsValidator />
+
+                    <label class="field">
+                        <span>Username</span>
+                        <InputText @bind-Value="LoginModel!.Username" autocomplete="username" />
+                        <ValidationMessage For="() => LoginModel!.Username" />
+                    </label>
+
+                    <label class="field">
+                        <span>Password</span>
+                        <InputText type="password" @bind-Value="LoginModel!.Password" autocomplete="current-password" />
+                        <ValidationMessage For="() => LoginModel!.Password" />
+                    </label>
+
+                    <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+                </EditForm>
+
+                <nav class="panel-links">
+                    <a href="register">Create an account</a>
+                    <a href="forgot-password">Forgotten your password?</a>
+                </nav>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+
+</section>
+
+@code {
+    // Nullable, with no property initializer, and filled in OnInitialized
+    // instead — the shape BL0008 asks for. On a form post the framework
+    // assigns this from the posted fields, and an initializer here is not a
+    // fallback: the assignment happens afterwards and can put null over it.
+    [SupplyParameterFromForm(FormName = "login")]
+    private LoginInput? LoginModel { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // ??= not =, so a bound model survives: this runs after binding.
+        LoginModel ??= new LoginInput();
+    }
+
+    private string? _loginError;
+
+    private async Task SignInAsync()
+    {
+        var result = await SignInManager.PasswordSignInAsync(
+            LoginModel!.Username,
+            LoginModel!.Password,
+            isPersistent: false,
+            lockoutOnFailure: false);
+
+        if (!result.Succeeded)
+        {
+            _loginError = "Invalid username or password.";
+            return;
+        }
+
+        Nav.NavigateTo("chat");
+    }
+
+    private sealed class LoginInput
+    {
+        [Required(ErrorMessage = "Username is required.")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required.")]
+        public string Password { get; set; } = string.Empty;
+    }
+}

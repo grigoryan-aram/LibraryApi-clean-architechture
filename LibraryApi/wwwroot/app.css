@@ -1333,12 +1333,6 @@ a {
     }
 }
 
-/* ---------- password reset panel ---------- */
-
-.panel-reset {
-    margin-top: 18px;
-}
-
 .panel-steps {
     display: flex;
     flex-direction: column;
@@ -1355,13 +1349,64 @@ a {
     margin-bottom: 8px;
 }
 
-.link-quiet {
-    display: inline-block;
-    margin-top: 12px;
+.panel-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
     font-size: 13px;
+}
+
+.panel-links a {
     color: var(--muted);
 }
 
-.link-quiet:hover {
+.panel-links a:hover {
     color: var(--text);
+}
+
+/* ---------- account pages, centred ---------- */
+
+/* Scoped to .account throughout: .panel, .panel-glyph and .panel-actions are
+   shared with other pages, which stay left-aligned. */
+
+.account {
+    max-width: 620px;
+    margin: 0 auto;
+}
+
+.account-head {
+    text-align: center;
+}
+
+.account-head p {
+    margin: 0 auto;
+}
+
+.account .panel-single {
+    width: 100%;
+    max-width: none;
+}
+
+.account .panel-glyph {
+    display: grid;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.account .panel h2 {
+    text-align: center;
+}
+
+.account .panel > p.muted,
+.account .panel .fineprint,
+.account .step-label {
+    text-align: center;
+}
+
+.account .panel-actions,
+.account .panel-links {
+    justify-content: center;
 }
