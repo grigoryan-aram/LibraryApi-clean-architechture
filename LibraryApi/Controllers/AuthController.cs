@@ -1,4 +1,5 @@
 ﻿using Application.DTOs;
+using Application.Features.PasswordReset;
 using Application.Features.Registration;
 using ErrorOr;
 using LibraryApi.Extensions;
@@ -69,5 +70,41 @@ namespace LibraryApi.Controllers;
     };
 
             return this.ToProblem(errors);
+        }
+
+        /// <summary>
+        /// Emails a one-time code to the address, if it has an account.
+        /// </summary>
+        /// <remarks>
+        /// Answers the same way whatever the address, so it cannot be used to
+        /// discover which addresses are registered.
+        /// </remarks>
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDTO request)
+        {
+            var result = await _mediator.Send(new ForgotPasswordCommand(request.Email));
+
+            return result.Match(
+                _ => Ok(new
+                {
+                    Message = "If that address has an account, a reset code is on its way."
+                }),
+                errors => this.ToProblem(errors));
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDTO request)
+        {
+            var result = await _mediator.Send(new ResetPasswordCommand(
+                request.Email,
+                request.Code,
+                request.NewPassword));
+
+            return result.Match(
+                _ => Ok(new
+                {
+                    Message = "Password changed. Sign in with your new password."
+                }),
+                errors => this.ToProblem(errors));
         }
     }

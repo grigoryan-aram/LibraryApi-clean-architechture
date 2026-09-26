@@ -29,6 +29,7 @@ public static class DependencyInjection
         // itself has to be registered (its IEmailService dependency comes from
         // Infrastructure).
         services.AddScoped<SendWelcomeEmailJob>();
+        services.AddScoped<SendPasswordResetEmailJob>();
 
 
         return services;

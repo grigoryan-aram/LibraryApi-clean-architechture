@@ -93,6 +93,63 @@ namespace Infrastructure.Services
              user.UserName!,
              user.Email!);
         }
+
+        public async Task<PasswordResetTargetDTO?> FindByEmailAsync(
+            string email,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return null;
+            }
+
+            var user = await _userManager.FindByEmailAsync(email);
+
+            if (user is null || user.Email is null || user.UserName is null)
+            {
+                return null;
+            }
+
+            return new PasswordResetTargetDTO(user.Id, user.UserName, user.Email);
+        }
+
+        public async Task<ErrorOr<Success>> ResetPasswordAsync(
+            string identityUserId,
+            string newPassword,
+            CancellationToken cancellationToken)
+        {
+            var user = await _userManager.FindByIdAsync(identityUserId);
+
+            if (user is null)
+            {
+                return Error.NotFound(
+                    "PasswordReset.UserNotFound",
+                    "That account no longer exists.");
+            }
+
+            // The caller has already proved it holds the emailed code, so the
+            // Identity token is minted here rather than round-tripped through
+            // the client. ResetPasswordAsync also rotates the security stamp,
+            // which signs out the account's existing cookies.
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+            var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+
+            if (!result.Succeeded)
+            {
+                return result.Errors
+                    .Select(error => Error.Validation(
+                        code: $"Identity.{error.Code}",
+                        description: error.Description))
+                    .ToList();
+            }
+
+            _logger.LogInformation(
+                "Reset the password for {Username}.",
+                user.UserName);
+
+            return Result.Success;
+        }
     }
 
 }

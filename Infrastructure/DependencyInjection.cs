@@ -53,6 +53,10 @@ namespace Infrastructure.DependencyInjection
             services.AddScoped<IMembersRepository, MembersRepository>();
             services.AddScoped<ILoansRepository, LoansRepository>();
             services.AddScoped<IIdentityService, IdentityService>();
+            services.AddScoped<IPasswordResetCodeRepository, PasswordResetCodeRepository>();
+
+            // Stateless, so a singleton is enough.
+            services.AddSingleton<IVerificationCodeService, VerificationCodeService>();
 
             // Roles and the seed administrator, created once per start (see
             // IdentitySeeder). Program.cs runs it right after Migrate().
