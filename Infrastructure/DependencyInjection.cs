@@ -1,13 +1,15 @@
-﻿using LibraryApi.Domain.RepositoryInterfaces;
-using Application.ServiceInterfaces;
+﻿using Application.ServiceInterfaces;
 using ErrorOr;
 using FluentEmail.MailKitSmtp;
 using Hangfire;
+using MassTransit;
 using Hangfire.SqlServer;
 using Infrastructure.Identity;
+using Infrastructure.Messaging;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Infrastructure.Settings;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -146,7 +148,55 @@ namespace Infrastructure.DependencyInjection
                     Password = emailSection["Password"]
                 });
 
+            AddMessaging(services, configuration);
+
             return Result.Success;
+        }
+
+        /// <summary>
+        /// Registers the RabbitMQ bus, or a no-op publisher when no broker is
+        /// configured.
+        /// </summary>
+        /// <remarks>
+        /// Conditional on purpose. MassTransit's bus is a hosted service that
+        /// starts connecting as soon as it is registered and retries forever,
+        /// so registering it unconditionally would fill the log of every
+        /// deployment that has no RabbitMQ — which is currently all of them.
+        /// Publishing integration events is additive; it must not change how a
+        /// deployment without a broker behaves.
+        /// </remarks>
+        private static void AddMessaging(
+            IServiceCollection services,
+            IConfiguration configuration)
+        {
+            var rabbit = configuration.GetSection("RabbitMq").Get<RabbitMqSettings>()
+                ?? new RabbitMqSettings();
+
+            services.Configure<RabbitMqSettings>(configuration.GetSection("RabbitMq"));
+
+            if (!rabbit.IsConfigured)
+            {
+                services.AddSingleton<IEventPublisher, NoOpEventPublisher>();
+                return;
+            }
+
+            services.AddMassTransit(bus =>
+            {
+                bus.SetKebabCaseEndpointNameFormatter();
+
+                bus.UsingRabbitMq((context, cfg) =>
+                {
+                    cfg.Host(rabbit.Host, rabbit.Port, rabbit.VirtualHost, host =>
+                    {
+                        host.Username(rabbit.Username);
+                        host.Password(rabbit.Password);
+                    });
+
+                    cfg.ConfigureEndpoints(context);
+                });
+            });
+
+            services.AddScoped<IEventPublisher, MassTransitEventPublisher>();
         }
 
     }

@@ -18,6 +18,7 @@ public class RegisterCommandHandlerTests
     private readonly Mock<IIdentityService> _identityService = new();
     private readonly Mock<IBackgroundJobClient> _backgroundJobClient = new();
     private readonly Mock<IMembersRepository> _members = new();
+    private readonly Mock<IEventPublisher> _events = new();
 
     private static readonly RegisterCommand Command =
         new("ada", "Pa55word!", "ada@example.com");
@@ -29,6 +30,7 @@ public class RegisterCommandHandlerTests
         new(_identityService.Object,
             _members.Object,
             _backgroundJobClient.Object,
+            _events.Object,
             NullLogger<global::RegisterCommandHandler>.Instance);
 
     private void GivenRegistrationReturns(ErrorOr<RegisteredUserDTO> result) =>

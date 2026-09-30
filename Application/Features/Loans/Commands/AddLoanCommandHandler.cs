@@ -1,4 +1,5 @@
 using Application.DTOs;
+using Application.IntegrationEvents;
 using LibraryApi.Domain.RepositoryInterfaces;
 using Application.ServiceInterfaces;
 using ErrorOr;
@@ -15,6 +16,7 @@ namespace Application.Features.Loans.Commands
         private readonly IBooksRepository _booksRepository;
         private readonly IMembersRepository _membersRepository;
         private readonly ILoanPolicy _loanPolicy;
+        private readonly IEventPublisher _events;
         private readonly ILogger<AddLoanCommandHandler> _logger;
 
         public AddLoanCommandHandler(
@@ -22,12 +24,14 @@ namespace Application.Features.Loans.Commands
             IBooksRepository booksRepository,
             IMembersRepository membersRepository,
             ILoanPolicy loanPolicy,
+            IEventPublisher events,
             ILogger<AddLoanCommandHandler> logger)
         {
             _loansRepository = loansRepository;
             _booksRepository = booksRepository;
             _membersRepository = membersRepository;
             _loanPolicy = loanPolicy;
+            _events = events;
             _logger = logger;
         }
 
@@ -116,6 +120,20 @@ namespace Application.Features.Loans.Commands
                 result.MemberId,
                 result.Id,
                 result.DueAt);
+
+            // After the write, and its failure is not the caller's problem —
+            // the loan is already committed, so a broker that is down must not
+            // turn a lent book into an error they would retry. The publisher
+            // logs and returns rather than throwing.
+            await _events.PublishAsync(
+                new BookBorrowed(
+                    result.Id,
+                    result.BookId,
+                    book.Title,
+                    result.MemberId,
+                    result.BorrowedAt,
+                    result.DueAt),
+                cancellationToken);
 
             return result.Adapt<LoansDTO>();
         }

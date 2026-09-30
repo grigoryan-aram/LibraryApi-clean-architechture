@@ -1,4 +1,6 @@
 using Application.DTOs;
+using Application.IntegrationEvents;
+using Application.ServiceInterfaces;
 using LibraryApi.Domain.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
@@ -11,13 +13,16 @@ namespace Application.Features.Loans.Commands
         : IRequestHandler<ReturnLoanCommand, ErrorOr<LoansDTO>>
     {
         private readonly ILoansRepository _loansRepository;
+        private readonly IEventPublisher _events;
         private readonly ILogger<ReturnLoanCommandHandler> _logger;
 
         public ReturnLoanCommandHandler(
             ILoansRepository loansRepository,
+            IEventPublisher events,
             ILogger<ReturnLoanCommandHandler> logger)
         {
             _loansRepository = loansRepository;
+            _events = events;
             _logger = logger;
         }
 
@@ -64,6 +69,16 @@ namespace Application.Features.Loans.Commands
                 updated.BookId,
                 updated.MemberId,
                 updated.ReturnedAt);
+
+            await _events.PublishAsync(
+                new BookReturned(
+                    updated.Id,
+                    updated.BookId,
+                    updated.MemberId,
+                    updated.BorrowedAt,
+                    updated.DueAt,
+                    updated.ReturnedAt!.Value),
+                cancellationToken);
 
             return updated.Adapt<LoansDTO>();
         }

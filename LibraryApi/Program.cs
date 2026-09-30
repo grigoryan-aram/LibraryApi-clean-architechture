@@ -8,6 +8,7 @@ using LibraryApi.HealthChecks;
 using LibraryApi.Extensions;
 using LibraryApi.MiddleWares;
 using LibraryApi.Infrastructure.Data;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -80,8 +81,11 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+// Tagged, because /health filters on it. MassTransit registers a
+// "masstransit-bus" check of its own the moment a bus is configured, and an
+// unmapped predicate would sweep it in.
 builder.Services.AddHealthChecks()
-    .AddCheck<DatabaseHealthCheck>("database");
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["core"]);
 
 builder.Services.AddApplication();
 
@@ -201,7 +205,15 @@ app.MapControllers().RequireRateLimiting("fixed");
 
 // Anonymous on purpose: a probe that needs a cookie cannot be used by the
 // host. It reports reachability only, never a connection string or a version.
-app.MapHealthChecks("/health");
+// Core checks only. Without the predicate this runs every registered check,
+// and MassTransit's bus check would drag the whole probe to Unhealthy the
+// moment RabbitMQ went away — telling the host to restart or drain an instance
+// that can still serve every request. Publishing is deliberately a side effect;
+// the broker is not what makes this app able to answer.
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("core")
+});
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 using (var scope = app.Services.CreateScope())
