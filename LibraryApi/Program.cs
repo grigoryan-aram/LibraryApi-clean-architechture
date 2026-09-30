@@ -14,8 +14,6 @@ using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
-
-    
 var builder = WebApplication.CreateBuilder(args);
 
 
@@ -76,7 +74,7 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(2),
                 // No queue: a rate-limited caller gets an immediate 429 rather
                 // than a request held open for up to a whole window. Queuing
-                // suits a worker draining a backlog, not an HTTP API.
+        // suits a worker draining a backlog, not an HTTP API.
                 QueueLimit = 0
             }));
 });
@@ -173,6 +171,7 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
 
 // After authentication on purpose: the policy partitions on the signed-in
 // user name, which is not populated until UseAuthentication has run.
