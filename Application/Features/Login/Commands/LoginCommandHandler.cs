@@ -31,6 +31,7 @@ namespace Application.Features.Login.Commands
             var result = await _identityService.LoginAsync(
                 request.Username,
                 request.Password,
+                request.RememberMe,
                 cancellationToken);
 
             if (result.IsError)

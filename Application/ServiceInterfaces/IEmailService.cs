@@ -10,5 +10,10 @@ namespace Application.ServiceInterfaces
         Task<ErrorOr<Success>> SendWelcomeEmailAsync(
             string email,
             string username);
+
+        Task<ErrorOr<Success>> SendPasswordResetEmailAsync(
+            string email,
+            string username,
+            string code);
     }
 }

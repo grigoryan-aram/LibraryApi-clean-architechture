@@ -2,6 +2,7 @@ using Application.ServiceInterfaces;
 using ErrorOr;
 using FluentEmail.Core;
 using FluentEmail.Core.Models;
+using LibraryApi.Domain.Constants;
 using Microsoft.Extensions.Logging;
 
 
@@ -60,6 +61,56 @@ namespace Infrastructure.Services
                 return Error.Failure(
                     "Email.SendFailed",
                     $"Failed to send welcome email to {email}: " +
+                    string.Join("; ", response.ErrorMessages));
+            }
+
+            return Result.Success;
+        }
+
+        public async Task<ErrorOr<Success>> SendPasswordResetEmailAsync(
+            string email,
+            string username,
+            string code)
+        {
+            SendResponse response;
+
+            try
+            {
+                response = await _email
+                    .To(email)
+                    .Subject("Your password reset code")
+                    .Body(
+                        $"Hello {username},\r\n\r\n" +
+                        $"Your password reset code is: {code}\r\n\r\n" +
+                        $"It expires in {PasswordResetRules.ExpiryMinutes} minutes and can be " +
+                        $"used once. If you did not ask to reset your password, " +
+                        $"ignore this email — nothing has changed.")
+                    .SendAsync();
+            }
+            catch (Exception ex)
+            {
+                // The code itself is never logged: the log is the one place a
+                // short-lived secret would outlive its window.
+                _logger.LogError(
+                    ex,
+                    "Failed to send a password reset email to {Email}.",
+                    email);
+
+                return Error.Failure(
+                    "Email.SendFailed",
+                    $"Failed to send a password reset email to {email}: {ex.Message}");
+            }
+
+            if (!response.Successful)
+            {
+                _logger.LogError(
+                    "Failed to send a password reset email to {Email}: {Errors}",
+                    email,
+                    string.Join("; ", response.ErrorMessages));
+
+                return Error.Failure(
+                    "Email.SendFailed",
+                    $"Failed to send a password reset email to {email}: " +
                     string.Join("; ", response.ErrorMessages));
             }
 

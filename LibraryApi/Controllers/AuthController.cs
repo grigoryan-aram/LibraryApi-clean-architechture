@@ -1,10 +1,10 @@
 ﻿using Application.DTOs;
+using Application.Features.Login.Commands;
+using Application.Features.PasswordReset;
 using Application.Features.Registration;
-using ErrorOr;
 using LibraryApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Cors;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 
@@ -16,15 +16,10 @@ namespace LibraryApi.Controllers;
     public class AuthController : ControllerBase
     {
         private readonly IMediator _mediator;
-        private readonly SignInManager<IdentityUser> _signInManager;
 
-        public AuthController(
-            IMediator mediator,
-            SignInManager<IdentityUser> signInManager)
+        public AuthController(IMediator mediator)
         {
             _mediator = mediator;
-            _signInManager = signInManager;
-
         }
 
         [HttpPost("register")]
@@ -47,27 +42,52 @@ namespace LibraryApi.Controllers;
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO dto)
         {
-            var result = await _signInManager.PasswordSignInAsync(
+            var result = await _mediator.Send(new LoginCommand(
                 dto.Username,
                 dto.Password,
-                isPersistent: false,
-                lockoutOnFailure: false);
+                dto.RememberMe));
 
-            if (result.Succeeded)
-            {
-                return Ok(new
+            return result.Match(
+                response => Ok(new
                 {
-                    Message = "Login successful"
-                });
-            }
+                    Message = response.Message
+                }),
+                errors => this.ToProblem(errors));
+        }
 
-            var errors = new List<Error>
-    {
-        Error.Validation(
-            "Auth.InvalidCredentials",
-            "Invalid username or password.")
-    };
+        /// <summary>
+        /// Emails a one-time code to the address, if it has an account.
+        /// </summary>
+        /// <remarks>
+        /// Answers the same way whatever the address, so it cannot be used to
+        /// discover which addresses are registered.
+        /// </remarks>
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDTO request)
+        {
+            var result = await _mediator.Send(new ForgotPasswordCommand(request.Email));
 
-            return this.ToProblem(errors);
+            return result.Match(
+                _ => Ok(new
+                {
+                    Message = "If that address has an account, a reset code is on its way."
+                }),
+                errors => this.ToProblem(errors));
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDTO request)
+        {
+            var result = await _mediator.Send(new ResetPasswordCommand(
+                request.Email,
+                request.Code,
+                request.NewPassword));
+
+            return result.Match(
+                _ => Ok(new
+                {
+                    Message = "Password changed. Sign in with your new password."
+                }),
+                errors => this.ToProblem(errors));
         }
     }

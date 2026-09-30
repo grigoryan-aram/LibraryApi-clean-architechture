@@ -171,7 +171,14 @@ ASP.NET Core Identity with `IdentityUser`/`IdentityRole` and **cookie** auth (`A
 
 `[Authorize]` sits at class level on the Books, Category, Loan, and Members controllers; `AuthController` is anonymous.
 
-`AuthController.Login` calls `SignInManager.PasswordSignInAsync` directly, bypassing MediatR. The parallel `Application/Features/Login/` slice and `IIdentityService.LoginAsync` implement the same thing and are currently unreferenced — if you touch login, pick one path rather than editing both.
+**There is one login implementation and everything goes through it.** `AuthController.Login` and `Login.razor` both send `LoginCommand` → `LoginCommandHandler` → `IIdentityService.LoginAsync` → `SignInManager.PasswordSignInAsync`. The controller no longer injects `SignInManager` at all. `Application/Features/Login/` used to be a parallel, unreferenced copy while the controller called `SignInManager` directly; that duplication is gone.
+
+Two consequences of routing login through MediatR, both deliberate:
+
+- **A bad password answers 401, not 400.** `IdentityService.LoginAsync` returns `Error.Unauthorized`, which `StatusCodeFor` maps to 401; the controller used to hand-build an `Error.Validation` and get a 400. 401 is the right answer for a rejected credential, but it is a change for any client checking the old status.
+- **`LoginCommandValidator` checks presence only.** It used to require a six-character password, which is the wrong place for a length rule twice over: an account whose password predates a policy change could never sign in again, and a short password came back as "must be at least 6 characters" instead of the same refusal every other bad credential gets.
+
+Signing in from a Razor page still writes the cookie, because `SignInManager` reaches the current request through `IHttpContextAccessor` — which is what `AddHttpContextAccessor()` in `Program.cs` is for. Running it inside a MediatR handler does not change that; it is the same DI scope and the same `HttpContext`.
 
 ### Members and accounts
 
@@ -184,6 +191,28 @@ An Identity account and a library member are separate, joined by **`MemberModel.
 - The member is named after the **username**, not the email.
 
 **`UpdateMemberCommand` cannot touch `IdentityUserId`.** It loads the entity, sets only `Name`, and writes it back, so a rename cannot silently unlink an account and orphan that person's loan history.
+
+### Password reset
+
+`POST /api/Auth/forgot-password { email }` emails a 7-character code (`VK35oeQ`) through the same Hangfire path as the welcome email; `POST /api/Auth/reset-password { email, code, newPassword }` checks it and has Identity set the password, which rotates the security stamp and so signs out that account's existing cookies. The Blazor equivalent is `/forgot-password`.
+
+- **Only a SHA-256 hash of the upper-cased code is stored**, and the code is never logged — there is a test for each. Matching ignores case and surrounding space, which costs entropy (36^7 rather than 62^7) and saves a wasted attempt when a phone keyboard capitalises it.
+- **Three controls, in `Domain/Constants/PasswordResetRules.cs`:** a 15-minute expiry, one live code per account (issuing a new one deletes the old), and five wrong guesses. **The attempt cap is the one that matters** — the `"fixed"` rate limiter still allows tens of thousands of tries a day per address.
+- **Both endpoints answer identically whether or not the address has an account**, and `reset-password` returns one error — `PasswordReset.InvalidCode` — for unknown address, no code, expired, spent and wrong alike. Otherwise an anonymous endpoint becomes an account-enumeration oracle. A test asserts all four produce the same description; keep it that way when editing.
+- **`forgot-password` returns Success even when the code cannot be stored or queued**, for the same reason, and logs at Error instead. A failure there is invisible to the caller by design.
+- Identity keeps ownership of password strength; its complaints pass through and leave the code usable for a retry.
+- Codes are generated from mixed-case alphanumerics, so `O`/`0` and `1`/`I` can both appear. Dropping `0O1lI` from the alphabet is the fix if transcription errors ever become a complaint.
+
+### Staying signed in
+
+`LoginDTO.RememberMe` and the "Keep me signed in" checkbox on `/login` both feed `SignInManager.PasswordSignInAsync(..., isPersistent:)`. `RememberMe` defaults to **false**, so an existing API caller that omits it keeps the old behaviour.
+
+The flag decides only whether the **browser** keeps the cookie across a restart — ticked it carries `expires`, unticked it is a session cookie (both measured on the `Set-Cookie`). The **ticket's** lifetime is `ExpireTimeSpan` in `ConfigureApplicationCookie`, set explicitly to **14 days, sliding**, so the number lives here rather than in a framework default.
+
+Two consequences worth knowing:
+
+- **On an HTTP-only deployment a persistent cookie is a 14-day bearer credential in clear text**, written to disk rather than dying with the browser. `Security:RequireHttps` is false in production (see **Transport security**), so the checkbox widens an existing exposure rather than creating a new one — but it does widen it.
+- **The flag reaches `isPersistent` only through `LoginCommandHandler`.** Both entry points send the command, so there is one place to change and one place to test.
 
 ### Roles
 
@@ -199,15 +228,15 @@ Both gates ask `AdminAccess.IsAdmin` (`LibraryApi/Extensions/AdminAccess.cs`) so
 - **Hangfire** — `HangfireDashboardAuthorization` returns false for anyone without the role. Hangfire's dashboard has no notion of a redirect: anonymous gets **401**, a signed-in non-admin gets **403** (both measured).
 - **Swagger** — `AdminOnlyPathMiddleWare` (`LibraryApi/MiddleWares/`) gates the `/swagger` prefix, mapped in `Program.cs` immediately before `UseSwagger()`. Swagger is served by middleware, not an endpoint, so there is no route to hang `[Authorize(Roles = "Admin")]` on; gating the path is the only way. It **challenges** an anonymous caller and **forbids** a signed-in non-admin, because signing in again would change nothing. The prefix match also covers `/swagger/v1/swagger.json` — gating only the UI page would leave the document readable.
 
-What that actually looks like on the wire is **302 to `/account` in both cases**, which is worth knowing before you go hunting for a bug:
+What that actually looks like on the wire is a **302 in both cases**, which is worth knowing before you go hunting for a bug:
 
 | caller | `/swagger/*` | `/hangfire` | an `[Authorize]` API route |
 |---|---|---|---|
-| anonymous | 302 → `/account?ReturnUrl=…` | 401 | 401 (with a `Location` header) |
+| anonymous | 302 → `/login?ReturnUrl=…` | 401 | 401 (with a `Location` header) |
 | signed in, no `Admin` | 302 → `/account?ReturnUrl=…` | 403 | 200 |
 | signed in, `Admin` | 200 | 200 | 200 |
 
-Two things drive that and neither is a defect: `ConfigureApplicationCookie` points **both** `LoginPath` and `AccessDeniedPath` at `/account`, so a challenge and a forbid land on the same URL; and the cookie handler only downgrades a redirect to a 401 for requests carrying `X-Requested-With: XMLHttpRequest` — an `Accept: application/json` header does **not** do it. The API routes answer 401 rather than redirecting because they are matched endpoints with API metadata, while `/swagger` is middleware with no endpoint at all. A signed-in non-admin being redirected to `/account` — a page that will tell them they are already signed in — is a genuine dead end; a dedicated access-denied page would be the fix.
+Two things drive that and neither is a defect: `ConfigureApplicationCookie` points `LoginPath` at `/login` and `AccessDeniedPath` at `/account`, so a challenge and a forbid land on different pages but both redirect; and the cookie handler only downgrades a redirect to a 401 for requests carrying `X-Requested-With: XMLHttpRequest` — an `Accept: application/json` header does **not** do it. The API routes answer 401 rather than redirecting because they are matched endpoints with API metadata, while `/swagger` is middleware with no endpoint at all. A signed-in non-admin being sent to `/account` — a page that will tell them they are already signed in — is still a dead end; a dedicated access-denied page would be the fix.
 
 Two things that will look like bugs and are not:
 
@@ -250,16 +279,16 @@ Things that will bite:
 
 ## Blazor front end
 
-The host also serves a small Blazor Server UI from `LibraryApi/Components/` — `App.razor` (root document), `Routes.razor`, `Layout/MainLayout.razor`, and three pages: `Pages/Home.razor` (`/`), `Pages/Chat.razor` (`/chat`), `Pages/Account.razor` (`/account`). Styling is one hand-written `wwwroot/app.css`; `wwwroot/app.js` holds a single scroll helper. There is no client project and no JS build step.
+The host also serves a small Blazor Server UI from `LibraryApi/Components/` — `App.razor` (root document), `Routes.razor`, `Layout/MainLayout.razor`, and six pages: `Pages/Home.razor` (`/`), `Pages/Chat.razor` (`/chat`), and the four account pages `Login.razor` (`/login`), `Register.razor` (`/register`), `ForgotPassword.razor` (`/forgot-password`) and `Account.razor` (`/account`). Styling is one hand-written `wwwroot/app.css`; `wwwroot/app.js` holds a single scroll helper. There is no client project and no JS build step.
 
 Wiring in `Program.cs`: `AddRazorComponents().AddInteractiveServerComponents()`, `AddCascadingAuthenticationState()`, `AddHttpContextAccessor()`, then `UseAntiforgery()` (after auth, before the endpoints), `MapStaticAssets()` and `MapRazorComponents<App>().AddInteractiveServerRenderMode()`.
 
 Four things here will waste your time if you do not know them:
 
 - **`@using Application.X` does not compile in a `.razor` file.** `RootNamespace` is `LibraryApi`, so Razor resolves it as `LibraryApi.Application.X`. `Components/_Imports.razor` pins them with `@using global::Application.DTOs` etc. Add new Application usings there, with `global::`.
-- **`Chat.razor` is interactive; `Account.razor` deliberately is not.** Signing in writes an auth cookie, and an interactive circuit has no response left to write headers on. The login/register/sign-out forms are static-SSR posts (`EditForm` + `FormName` + `[SupplyParameterFromForm]`), which is the same shape the ASP.NET Identity templates use. Do not add `@rendermode` to that page.
-- **`AuthorizeView` and `EditForm` both bind `context`.** Nesting a form inside `<AuthorizeView>` is a compile error until you name one — `Account.razor` uses `<AuthorizeView Context="auth">`.
-- **`ConfigureApplicationCookie` points `LoginPath` at `/account`.** Identity defaults to `/Account/Login`, which does not exist here, so a browser hitting `/chat` signed-out was being redirected to a 404. API callers are unaffected: the cookie handler still answers 401 when the request does not accept HTML, which is why `GET /api/ClaudeAI` returns 401 to curl but 302 to a browser.
+- **`Chat.razor` is interactive; the four account pages deliberately are not.** Signing in writes an auth cookie, and an interactive circuit has no response left to write headers on. Their forms are static-SSR posts (`EditForm` + `FormName` + `[SupplyParameterFromForm]`), which is the same shape the ASP.NET Identity templates use. Do not add `@rendermode` to any of them.
+- **`AuthorizeView` and `EditForm` both bind `context`.** Nesting a form inside `<AuthorizeView>` is a compile error until you name one — the account pages use `<AuthorizeView Context="auth">`.
+- **`ConfigureApplicationCookie` points `LoginPath` at `/login`.** Identity defaults to `/Account/Login`, which does not exist here, so a browser hitting `/chat` signed-out was being redirected to a 404. It pointed at `/account` while sign-in lived there; moving the form to its own page moved the path with it. API callers are unaffected: the cookie handler still answers 401 when the request does not accept HTML, which is why `GET /api/ClaudeAI` returns 401 to curl but 302 to a browser.
 
 `Chat.razor` injects `IMediator` and sends `AskClaudeQuery` **in-process** — component → handler, no HTTP hop back into this same app. The interactive circuit is a WebSocket (SignalR); on hosting without WebSocket support SignalR silently falls back to long polling, which still works but is worse. The components have no unit tests — bUnit would be a new dependency for markup that holds no logic; they were verified by driving a real browser instead.
 

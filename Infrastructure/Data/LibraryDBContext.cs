@@ -15,6 +15,7 @@ public class LibraryDBContext : IdentityDbContext<IdentityUser>
     public DbSet<MemberModel> Members { get; set; }
     public DbSet<CategoryModel> Categories { get; set; }
     public DbSet<LoanModel> Loans { get; set; }
+    public DbSet<PasswordResetCodeModel> PasswordResetCodes { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

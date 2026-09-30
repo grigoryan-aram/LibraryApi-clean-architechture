@@ -25,6 +25,7 @@ public class LoginCommandHandlerTests
             .Setup(s => s.LoginAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(result);
 
@@ -38,7 +39,7 @@ public class LoginCommandHandlerTests
         Assert.False(result.IsError);
         Assert.Equal("Signed in.", result.Value.Message);
         _identityService.Verify(s => s.LoginAsync(
-            "ada", Password, It.IsAny<CancellationToken>()), Times.Once);
+            "ada", Password, false, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -83,5 +84,28 @@ public class LoginCommandHandlerTests
 
         Assert.NotEmpty(_logger.Entries);
         Assert.False(_logger.Mentions(Password));
+    }
+
+    // The checkbox on /login and RememberMe on the API both arrive here, and
+    // this is the only thing between them and isPersistent.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Passes_remember_me_through_untouched(bool rememberMe)
+    {
+        GivenLoginReturns(new LoginResponseDTO("Signed in."));
+
+        await CreateSut().Handle(
+            Command with { RememberMe = rememberMe },
+            CancellationToken.None);
+
+        _identityService.Verify(s => s.LoginAsync(
+            "ada", Password, rememberMe, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Defaults_to_not_remembering()
+    {
+        Assert.False(new LoginCommand("ada", Password).RememberMe);
     }
 }
