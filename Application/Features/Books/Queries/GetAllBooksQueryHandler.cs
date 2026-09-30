@@ -1,6 +1,6 @@
 using Application.DTOs;
-using LibraryApi.Domain.RepositoryInterfaces;
 using ErrorOr;
+using LibraryApi.Domain.RepositoryInterfaces;
 using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -24,7 +24,7 @@ namespace Application.Features.Books.Queries
             _loansRepository = loansRepository;
             _logger = logger;
         }
-
+        
 
         public async Task<ErrorOr<IReadOnlyList<BooksDTO>>> Handle(
             GetAllBooksQuery request,

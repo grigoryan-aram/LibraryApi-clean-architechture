@@ -1,5 +1,4 @@
-﻿using LibraryApi.Domain.RepositoryInterfaces;
-using Application.ServiceInterfaces;
+﻿using Application.ServiceInterfaces;
 using ErrorOr;
 using FluentEmail.MailKitSmtp;
 using Hangfire;
@@ -8,12 +7,14 @@ using Infrastructure.Identity;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Infrastructure.Settings;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Infrastructure.Data;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-
+using RabbitMQ.Client;
 
 namespace Infrastructure.DependencyInjection
 {
@@ -141,6 +142,25 @@ namespace Infrastructure.DependencyInjection
                     User = emailSection["User"],
                     Password = emailSection["Password"]
                 });
+
+
+            services.AddSingleton(sp =>
+            {
+                var config = sp.GetRequiredService<IConfiguration>();
+
+                var factory = new ConnectionFactory
+                {
+                    HostName = config["localhost"]!,
+                    Port = int.Parse(config["5672"]!),
+                    UserName = config["guest"]!,
+                    Password = config["guest"]!
+                };
+
+                return factory.CreateConnectionAsync().GetAwaiter().GetResult();
+            });
+
+            
+
 
             return Result.Success;
         }
