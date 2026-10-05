@@ -15,6 +15,7 @@ using Serilog;
 using RabbitMQ.Client;
 using RabbitMQ;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 
