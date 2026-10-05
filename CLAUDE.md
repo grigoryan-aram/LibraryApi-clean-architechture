@@ -56,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (210 tests across three projects, all passing):
+Test (284 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -104,7 +104,7 @@ Filtering, ordering and paging all happen in SQL, in `BooksRepository.SearchAsyn
 
 ## Health and logging
 
-`GET /health` is anonymous and not rate limited, and runs `DatabaseHealthCheck` — one `CanConnectAsync`, hand-written rather than pulling in the EF Core health-check package, because a probe that answers Healthy while SQL Server is unreachable is worse than no probe. It reports reachability only, never a connection string or a version.
+`GET /health` is anonymous and not rate limited, runs only checks tagged **`core`** (see **Integration events** for why the predicate matters), and that is one check: `DatabaseHealthCheck` — one `CanConnectAsync`, hand-written rather than pulling in the EF Core health-check package, because a probe that answers Healthy while SQL Server is unreachable is worse than no probe. It reports reachability only, never a connection string or a version.
 
 Logging is **Serilog** (`Serilog.AspNetCore`), console plus a daily rolling file under `<content root>/logs/library-.log`, 14 files retained, `shared: true` because IIS can run more than one worker process against the same folder. Levels come from the **`Serilog`** section of `appsettings.json`, not `Logging:LogLevel` — `Microsoft.EntityFrameworkCore` is overridden to Warning there, which is what stops every request drowning in `Executed DbCommand`. The file template includes `{SourceContext}` so a line says which handler wrote it; without that the per-handler loggers tell you what happened but not where. `app.UseSerilogRequestLogging()` collapses the framework's several-lines-per-request into one.
 
@@ -242,6 +242,23 @@ Two things that will look like bugs and are not:
 
 - **Role claims live in the auth cookie**, minted at sign-in. A user who was signed in when their role changed keeps the old answer until the cookie is refreshed or they sign in again. After seeding a new admin, sign out and back in.
 - The Swagger and Hangfire links in `MainLayout.razor` are inside `<AuthorizeView Roles="@Roles.Admin">`, so they disappear for everyone else. That is cosmetic only — the two gates above are the actual enforcement.
+
+## Integration events (RabbitMQ)
+
+Three events are published to RabbitMQ through **MassTransit 8.5.11**: `MemberRegistered` (from `RegisterCommandHandler`), `BookBorrowed` (`AddLoanCommandHandler`) and `BookReturned` (`ReturnLoanCommandHandler`). Contracts are records in `Application/IntegrationEvents/`. **Nothing consumes them yet** — this is a publisher only.
+
+**Pinned to 8.x deliberately.** MassTransit v9 moved to a commercial licence; 8.x is Apache-2.0. Same reasoning that keeps FluentAssertions off this repo. Do not let a "update all packages" pass move it to 9.
+
+Handlers depend on **`IEventPublisher`** (`Application/ServiceInterfaces/`), so no MassTransit type reaches Application — the same shape as `IEmailService`. It returns `ErrorOr<Success>`; publishing is a side effect after the write has committed, and callers ignore the result beyond what the publisher already logged.
+
+Four things that will bite:
+
+- **No broker configured means no bus at all.** `RabbitMqSettings.IsConfigured` requires Host, Username *and* Password; with any missing, `AddMessaging` registers `NoOpEventPublisher` and never calls `AddMassTransit`. This is what keeps the feature additive — MassTransit's bus is a hosted service that starts connecting the moment it is registered and retries forever, so registering it unconditionally would fill the log of every deployment that has no RabbitMQ. Production currently has none.
+- **`Publish` does not fail fast against an unreachable broker — it waits for the bus to connect.** Measured: lending a book against a configured-but-down RabbitMQ *hung the HTTP request* rather than erroring. `MassTransitEventPublisher` therefore bounds every publish with a linked `CancellationTokenSource` at **5 seconds** and maps the deadline to `Events.PublishTimedOut`. The request then succeeds and the write survives — but it still costs 5 seconds per publish while the broker is down. **The real fix is the transactional outbox** (MassTransit supports one over EF Core): write the message in the same transaction as the entity and let a background delivery service publish it, so the request never touches the broker at all. Worth doing before this carries anything that matters.
+- **`/health` filters on the `core` tag.** `AddMassTransit` registers a `masstransit-bus` health check, and `MapHealthChecks` with no predicate runs *every* registered check — which made an unreachable broker turn the whole probe Unhealthy (503) while the database was fine and requests served normally. That is the opposite of what a liveness probe should say, and would have had a host restart or drain a healthy instance. Keep the predicate.
+- **`MemberRegistered` is suppressed when the member could not be created.** `LinkMemberAsync` returns the member id or null, and the event carries an id there would be nothing honest to put in.
+
+Local broker: `docker-compose up -d rabbitmq` (management UI on http://localhost:15672, guest/guest). Credentials are secrets like every other — set `RabbitMq:Username` / `RabbitMq:Password` as user secrets, or `RabbitMq__Username` / `RabbitMq__Password` on the host.
 
 ## Background jobs and email
 

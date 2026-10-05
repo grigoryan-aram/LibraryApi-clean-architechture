@@ -15,6 +15,7 @@ public class AddLoanCommandHandlerTests
     private readonly Mock<ILoansRepository> _loans = new();
     private readonly Mock<IBooksRepository> _books = new();
     private readonly Mock<IMembersRepository> _members = new();
+    private readonly Mock<IEventPublisher> _events = new();
 
     // A stub rather than a mock: the policy is pure arithmetic, and a fixed
     // period makes the due-date assertion exact.
@@ -31,6 +32,7 @@ public class AddLoanCommandHandlerTests
             _books.Object,
             _members.Object,
             new FixedLoanPolicy(),
+            _events.Object,
             NullLogger<AddLoanCommandHandler>.Instance);
 
     private void GivenBookExists(int id = 1, int totalCopies = 1) =>

@@ -1,4 +1,5 @@
 using Application.Features.Loans.Commands;
+using Application.ServiceInterfaces;
 using LibraryApi.Domain.RepositoryInterfaces;
 using ErrorOr;
 using LibraryApi.Domain.Entities;
@@ -10,8 +11,9 @@ namespace Application.UnitTests.Features.Loans;
 public class ReturnLoanCommandHandlerTests
 {
     private readonly Mock<ILoansRepository> _loans = new();
+    private readonly Mock<IEventPublisher> _events = new();
 
-    private ReturnLoanCommandHandler CreateSut() => new(_loans.Object, NullLogger<ReturnLoanCommandHandler>.Instance);
+    private ReturnLoanCommandHandler CreateSut() => new(_loans.Object, _events.Object, NullLogger<ReturnLoanCommandHandler>.Instance);
 
     private void GivenLoan(LoanModel? loan) =>
         _loans.Setup(repo => repo.GetLoanByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))

@@ -1,4 +1,5 @@
 using Application.DTOs;
+using Application.IntegrationEvents;
 using Application.Features.Registration;
 using Application.Jobs;
 using Application.ServiceInterfaces;
@@ -15,17 +16,20 @@ public class RegisterCommandHandler
     private readonly IIdentityService _identityService;
     private readonly IMembersRepository _membersRepository;
     private readonly IBackgroundJobClient _backgroundJobClient;
+    private readonly IEventPublisher _events;
     private readonly ILogger<RegisterCommandHandler> _logger;
 
     public RegisterCommandHandler(
         IIdentityService identityService,
         IMembersRepository membersRepository,
         IBackgroundJobClient backgroundJobClient,
+        IEventPublisher events,
         ILogger<RegisterCommandHandler> logger)
     {
         _identityService = identityService;
         _membersRepository = membersRepository;
         _backgroundJobClient = backgroundJobClient;
+        _events = events;
         _logger = logger;
     }
 
@@ -50,7 +54,18 @@ public class RegisterCommandHandler
             return user.Errors;
         }
 
-        await LinkMemberAsync(user.Value, cancellationToken);
+        var memberId = await LinkMemberAsync(user.Value, cancellationToken);
+
+        if (memberId is not null)
+        {
+            await _events.PublishAsync(
+                new MemberRegistered(
+                    user.Value.Username,
+                    user.Value.Email,
+                    memberId.Value,
+                    DateTime.UtcNow),
+                cancellationToken);
+        }
 
         // The account already exists at this point. If Hangfire cannot take the
         // job — its schema missing on a fresh database, the SQL user lacking
@@ -78,7 +93,7 @@ public class RegisterCommandHandler
         return user.Value;
     }
 
-    private async Task LinkMemberAsync(
+    private async Task<int?> LinkMemberAsync(
         RegisteredUserDTO user,
         CancellationToken cancellationToken)
     {
@@ -90,16 +105,18 @@ public class RegisterCommandHandler
 
             if (existing is not null)
             {
-                return;
+                return existing.Id;
             }
 
-            await _membersRepository.AddMemberAsync(
+            var member = await _membersRepository.AddMemberAsync(
                 new MemberModel
                 {
                     Name = user.Username,
                     IdentityUserId = user.UserId
                 },
                 cancellationToken);
+
+            return member.Id;
         }
         catch (Exception exception)
         {
@@ -107,6 +124,11 @@ public class RegisterCommandHandler
                 exception,
                 "Registered {Username} but could not create their library member.",
                 user.Username);
+
+            // Null, not a throw: the account exists and registration has
+            // succeeded. It also suppresses MemberRegistered, which carries a
+            // member id there would be nothing honest to put in.
+            return null;
         }
     }
 }
