@@ -6,6 +6,7 @@ using MassTransit;
 using Hangfire.SqlServer;
 using Infrastructure.Identity;
 using Infrastructure.Messaging;
+using Infrastructure.Messaging.Consumers;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Infrastructure.Settings;
@@ -173,15 +174,54 @@ namespace Infrastructure.DependencyInjection
 
             services.Configure<RabbitMqSettings>(configuration.GetSection("RabbitMq"));
 
+            // Handlers wrap an entity write and its event in one transaction,
+            // with or without a broker.
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
+
             if (!rabbit.IsConfigured)
             {
                 services.AddSingleton<IEventPublisher, NoOpEventPublisher>();
                 return;
             }
 
+            services.AddScoped<MemberContactLookup>();
+
             services.AddMassTransit(bus =>
             {
                 bus.SetKebabCaseEndpointNameFormatter();
+
+                // Bus outbox: a publish from a request writes an OutboxMessage
+                // row through the request's DbContext, and the delivery
+                // service forwards it to RabbitMQ afterwards. Consumer outbox
+                // (the inbox): each endpoint records what it has consumed, so
+                // a redelivered message is not handled twice.
+                bus.AddEntityFrameworkOutbox<LibraryDBContext>(outbox =>
+                {
+                    outbox.UseSqlServer();
+                    outbox.UseBusOutbox();
+
+                    // Default is 10 seconds. One keeps an emailed receipt
+                    // close to the action, at the cost of a cheap query a
+                    // second while idle.
+                    outbox.QueryDelay = TimeSpan.FromSeconds(1);
+                });
+
+                bus.AddConsumer<BookBorrowedConsumer>();
+                bus.AddConsumer<BookReturnedConsumer>();
+
+                // Retry before the inbox, which is the order MassTransit
+                // documents: each retry then re-runs inside a fresh inbox
+                // transaction. A message still failing after these goes to
+                // its endpoint's _error queue.
+                bus.AddConfigureEndpointsCallback((context, _, endpoint) =>
+                {
+                    endpoint.UseMessageRetry(retry => retry.Intervals(
+                        TimeSpan.FromSeconds(1),
+                        TimeSpan.FromSeconds(5),
+                        TimeSpan.FromSeconds(30)));
+
+                    endpoint.UseEntityFrameworkOutbox<LibraryDBContext>(context);
+                });
 
                 bus.UsingRabbitMq((context, cfg) =>
                 {
@@ -195,7 +235,7 @@ namespace Infrastructure.DependencyInjection
                 });
             });
 
-            services.AddScoped<IEventPublisher, MassTransitEventPublisher>();
+            services.AddScoped<IEventPublisher, OutboxEventPublisher>();
         }
 
     }

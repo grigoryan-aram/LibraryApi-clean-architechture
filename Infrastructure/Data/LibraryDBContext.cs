@@ -1,4 +1,5 @@
 ﻿using LibraryApi.Domain.Entities;
+using MassTransit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -39,6 +40,12 @@ public class LibraryDBContext : IdentityDbContext<IdentityUser>
 
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(LibraryDBContext).Assembly);
+
+        // MassTransit's transactional outbox and inbox. Mapped whether or not
+        // a broker is configured, so the schema does not depend on config.
+        modelBuilder.AddInboxStateEntity();
+        modelBuilder.AddOutboxMessageEntity();
+        modelBuilder.AddOutboxStateEntity();
 
         base.OnModelCreating(modelBuilder);
 

@@ -30,6 +30,8 @@ public static class DependencyInjection
         // Infrastructure).
         services.AddScoped<SendWelcomeEmailJob>();
         services.AddScoped<SendPasswordResetEmailJob>();
+        services.AddScoped<SendLoanReceiptEmailJob>();
+        services.AddScoped<SendReturnReceiptEmailJob>();
 
 
         return services;

@@ -11,6 +11,8 @@ using LibraryApi.Domain.Entities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
+using Application.UnitTests.TestDoubles;
+
 namespace Application.UnitTests.Features.Registration;
 
 public class RegisterCommandHandlerTests
@@ -19,6 +21,7 @@ public class RegisterCommandHandlerTests
     private readonly Mock<IBackgroundJobClient> _backgroundJobClient = new();
     private readonly Mock<IMembersRepository> _members = new();
     private readonly Mock<IEventPublisher> _events = new();
+    private readonly RecordingUnitOfWork _unitOfWork = new();
 
     private static readonly RegisterCommand Command =
         new("ada", "Pa55word!", "ada@example.com");
@@ -31,6 +34,7 @@ public class RegisterCommandHandlerTests
             _members.Object,
             _backgroundJobClient.Object,
             _events.Object,
+            _unitOfWork,
             NullLogger<global::RegisterCommandHandler>.Instance);
 
     private void GivenRegistrationReturns(ErrorOr<RegisteredUserDTO> result) =>

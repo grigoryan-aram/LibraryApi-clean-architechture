@@ -29,6 +29,11 @@ namespace Application.ServiceInterfaces
             string email,
             CancellationToken cancellationToken);
 
+        // Null for an id with no account, or an account with no address.
+        Task<AccountContactDTO?> FindContactAsync(
+            string identityUserId,
+            CancellationToken cancellationToken);
+
         Task<ErrorOr<Success>> ResetPasswordAsync(
             string identityUserId,
             string newPassword,

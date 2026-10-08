@@ -1,6 +1,7 @@
 using Application.DTOs;
 using Application.IntegrationEvents;
 using Application.ServiceInterfaces;
+using LibraryApi.Domain.Entities;
 using LibraryApi.Domain.RepositoryInterfaces;
 using ErrorOr;
 using Mapster;
@@ -14,15 +15,18 @@ namespace Application.Features.Loans.Commands
     {
         private readonly ILoansRepository _loansRepository;
         private readonly IEventPublisher _events;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<ReturnLoanCommandHandler> _logger;
 
         public ReturnLoanCommandHandler(
             ILoansRepository loansRepository,
             IEventPublisher events,
+            IUnitOfWork unitOfWork,
             ILogger<ReturnLoanCommandHandler> logger)
         {
             _loansRepository = loansRepository;
             _events = events;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -61,26 +65,42 @@ namespace Application.Features.Loans.Commands
 
             loan.ReturnedAt = DateTime.UtcNow;
 
-            var updated = await _loansRepository.UpdateLoanAsync(loan, cancellationToken);
+            // The return and its BookReturned event commit together.
+            var returned = await _unitOfWork.ExecuteInTransactionAsync<LoanModel>(async token =>
+            {
+                var updated = await _loansRepository.UpdateLoanAsync(loan, token);
+
+                var published = await _events.PublishAsync(
+                    new BookReturned(
+                        updated.Id,
+                        updated.BookId,
+                        updated.MemberId,
+                        updated.BorrowedAt,
+                        updated.DueAt,
+                        updated.ReturnedAt!.Value),
+                    token);
+
+                if (published.IsError)
+                {
+                    return published.Errors;
+                }
+
+                return updated;
+            }, cancellationToken);
+
+            if (returned.IsError)
+            {
+                return returned.Errors;
+            }
 
             _logger.LogInformation(
                 "Returned loan {LoanId} (book {BookId}, member {MemberId}) at {ReturnedAt:u}.",
-                updated.Id,
-                updated.BookId,
-                updated.MemberId,
-                updated.ReturnedAt);
+                returned.Value.Id,
+                returned.Value.BookId,
+                returned.Value.MemberId,
+                returned.Value.ReturnedAt);
 
-            await _events.PublishAsync(
-                new BookReturned(
-                    updated.Id,
-                    updated.BookId,
-                    updated.MemberId,
-                    updated.BorrowedAt,
-                    updated.DueAt,
-                    updated.ReturnedAt!.Value),
-                cancellationToken);
-
-            return updated.Adapt<LoansDTO>();
+            return returned.Value.Adapt<LoansDTO>();
         }
     }
 }
