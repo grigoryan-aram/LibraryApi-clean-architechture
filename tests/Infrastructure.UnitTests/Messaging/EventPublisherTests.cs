@@ -1,70 +1,162 @@
 using Application.IntegrationEvents;
+using Application.ServiceInterfaces;
 using ErrorOr;
 using Infrastructure.Messaging;
+using Infrastructure.Repositories;
 using Infrastructure.Settings;
+using Infrastructure.UnitTests.Repositories;
+using LibraryApi.Domain.Entities;
+using LibraryApi.Infrastructure.Data;
 using MassTransit;
+using MassTransit.EntityFrameworkCoreIntegration;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Infrastructure.UnitTests.Messaging;
 
-public class MassTransitEventPublisherTests
+public class OutboxEventPublisherTests
 {
-    private readonly Mock<IPublishEndpoint> _endpoint = new();
+    // The publish endpoint is MassTransit's to get right; this is about the
+    // boundary. A thrown exception here would bypass the caller's rollback and
+    // land in GlobalExceptionMiddleware.
+    [Fact]
+    public async Task Maps_a_failure_to_record_the_event_to_an_unexpected_error()
+    {
+        using var db = new SqliteDatabase();
+        var endpoint = new Mock<IPublishEndpoint>();
+        endpoint.Setup(e => e.Publish(It.IsAny<MemberRegistered>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("outbox table is missing"));
 
-    private MassTransitEventPublisher CreateSut() =>
-        new(_endpoint.Object, NullLogger<MassTransitEventPublisher>.Instance);
+        var result = await new OutboxEventPublisher(
+                endpoint.Object, db.Context, NullLogger<OutboxEventPublisher>.Instance)
+            .PublishAsync(
+                new MemberRegistered("ada", "ada@example.com", 7, DateTime.UtcNow),
+                CancellationToken.None);
 
-    private static MemberRegistered Event =>
-        new("ada", "ada@example.com", 7, DateTime.UtcNow);
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.Equal("Events.NotRecorded", result.FirstError.Code);
+    }
+}
+
+/// <summary>
+/// The outbox for real: MassTransit's bus outbox over SQLite, no broker.
+/// </summary>
+/// <remarks>
+/// The claim worth proving is the one the whole arrangement exists for — an
+/// entity and the event announcing it reach the database together or not at
+/// all, and recording an event never needs RabbitMQ to be there. The delivery
+/// service is disabled so the rows stay put to be counted.
+/// </remarks>
+public sealed class TransactionalOutboxTests : IAsyncDisposable
+{
+    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    private readonly ServiceProvider _provider;
+
+    public TransactionalOutboxTests()
+    {
+        _connection.Open();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDbContext<LibraryDBContext>(options => options.UseSqlite(_connection));
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IEventPublisher, OutboxEventPublisher>();
+        services.AddMassTransit(bus =>
+        {
+            bus.AddEntityFrameworkOutbox<LibraryDBContext>(outbox =>
+            {
+                outbox.UseSqlite();
+                outbox.UseBusOutbox(o => o.DisableDeliveryService());
+            });
+
+            bus.UsingInMemory();
+        });
+
+        _provider = services.BuildServiceProvider();
+
+        using var scope = _provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<LibraryDBContext>().Database.EnsureCreated();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _provider.DisposeAsync();
+        await _connection.DisposeAsync();
+    }
+
+    private async Task<ErrorOr<int>> AddMemberAndAnnounce(bool thenFail)
+    {
+        using var scope = _provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<LibraryDBContext>();
+        var events = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        return await unitOfWork.ExecuteInTransactionAsync<int>(async token =>
+        {
+            var member = new MemberModel { Name = "ada" };
+            context.Members.Add(member);
+            await context.SaveChangesAsync(token);
+
+            var published = await events.PublishAsync(
+                new MemberRegistered("ada", "ada@example.com", member.Id, DateTime.UtcNow),
+                token);
+
+            if (published.IsError)
+            {
+                return published.Errors;
+            }
+
+            if (thenFail)
+            {
+                return Error.Failure("Test.Failed", "something after the publish failed");
+            }
+
+            return member.Id;
+        }, CancellationToken.None);
+    }
+
+    private async Task<(int Members, int OutboxMessages)> Rows()
+    {
+        using var scope = _provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<LibraryDBContext>();
+
+        return (
+            await context.Members.CountAsync(),
+            await context.Set<OutboxMessage>().CountAsync());
+    }
 
     [Fact]
-    public async Task Publishes_the_event_to_the_bus()
+    public async Task Commits_the_entity_and_its_event_together_without_a_broker()
     {
-        var result = await CreateSut().PublishAsync(Event, CancellationToken.None);
+        var result = await AddMemberAndAnnounce(thenFail: false);
 
         Assert.False(result.IsError);
-        _endpoint.Verify(e => e.Publish(
-            It.Is<MemberRegistered>(evt => evt.MemberId == 7),
-            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal((1, 1), await Rows());
     }
 
-    // MassTransit throws when the broker is unreachable. Mapped at this
-    // boundary rather than rethrown, the way ClaudeService maps the Anthropic
-    // SDK — a thrown exception here would reach GlobalExceptionMiddleware and
-    // turn a committed loan into a 500.
     [Fact]
-    public async Task Maps_a_broker_failure_to_an_error_instead_of_throwing()
+    public async Task Rolls_back_the_event_with_the_entity()
     {
-        _endpoint.Setup(e => e.Publish(
-                     It.IsAny<MemberRegistered>(), It.IsAny<CancellationToken>()))
-                 .ThrowsAsync(new RabbitMqConnectionException("connection refused"));
-
-        var result = await CreateSut().PublishAsync(Event, CancellationToken.None);
+        var result = await AddMemberAndAnnounce(thenFail: true);
 
         Assert.True(result.IsError);
-        Assert.Equal(ErrorType.Failure, result.FirstError.Type);
-        Assert.Equal("Events.PublishFailed", result.FirstError.Code);
+        Assert.Equal((0, 0), await Rows());
     }
 
-    // Publish does not fail fast against an unreachable broker — it waits for
-    // the bus to connect. Unbounded, that hangs the HTTP request that caused
-    // it, which is exactly what happened before the timeout was added.
     [Fact]
-    public async Task Gives_up_rather_than_waiting_forever_for_a_silent_broker()
+    public async Task Records_the_event_type_so_the_delivery_service_publishes_the_right_message()
     {
-        _endpoint.Setup(e => e.Publish(
-                     It.IsAny<MemberRegistered>(), It.IsAny<CancellationToken>()))
-                 .Returns((MemberRegistered _, CancellationToken token) =>
-                     Task.Delay(Timeout.Infinite, token));
+        await AddMemberAndAnnounce(thenFail: false);
 
-        var started = DateTime.UtcNow;
-        var result = await CreateSut().PublishAsync(Event, CancellationToken.None);
-        var elapsed = DateTime.UtcNow - started;
+        using var scope = _provider.CreateScope();
+        var message = await scope.ServiceProvider.GetRequiredService<LibraryDBContext>()
+            .Set<OutboxMessage>().SingleAsync();
 
-        Assert.True(result.IsError);
-        Assert.Equal("Events.PublishTimedOut", result.FirstError.Code);
-        Assert.True(elapsed < TimeSpan.FromSeconds(30), $"took {elapsed}");
+        Assert.Contains(nameof(MemberRegistered), message.MessageType);
     }
 }
 

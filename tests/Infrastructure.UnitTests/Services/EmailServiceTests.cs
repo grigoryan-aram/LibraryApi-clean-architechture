@@ -94,4 +94,45 @@ public class EmailServiceTests
 
         _email.Verify(e => e.To("ada@example.com"), Times.Once);
     }
+
+    [Fact]
+    public async Task Loan_receipt_names_the_book_and_the_due_date()
+    {
+        GivenSendReturns(new SendResponse());
+
+        var result = await CreateSut().SendLoanReceiptEmailAsync(
+            "ada@example.com", "ada", "Dune", new DateTime(2026, 10, 22, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.False(result.IsError);
+        _email.Verify(e => e.Subject("You borrowed \"Dune\""), Times.Once);
+        _email.Verify(e => e.Body(
+            It.Is<string>(body => body.Contains("Thursday 22 October 2026")),
+            It.IsAny<bool>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Return_receipt_says_so_when_the_book_came_back_late()
+    {
+        GivenSendReturns(new SendResponse());
+
+        await CreateSut().SendReturnReceiptEmailAsync(
+            "ada@example.com", "ada", "Dune", DateTime.UtcNow, wasOverdue: true);
+
+        _email.Verify(e => e.Body(
+            It.Is<string>(body => body.Contains("after its due date")),
+            It.IsAny<bool>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Receipts_report_a_failed_send_like_every_other_email()
+    {
+        GivenSendReturns(new SendResponse { ErrorMessages = { "mailbox unavailable" } });
+
+        var result = await CreateSut().SendReturnReceiptEmailAsync(
+            "ada@example.com", "ada", "Dune", DateTime.UtcNow, wasOverdue: false);
+
+        Assert.True(result.IsError);
+        Assert.Equal("Email.SendFailed", result.FirstError.Code);
+        Assert.Contains("mailbox unavailable", result.FirstError.Description);
+    }
 }

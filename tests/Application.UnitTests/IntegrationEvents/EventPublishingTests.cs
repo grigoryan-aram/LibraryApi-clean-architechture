@@ -13,23 +13,28 @@ using LibraryApi.Domain.RepositoryInterfaces;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
+using Application.UnitTests.TestDoubles;
+
 namespace Application.UnitTests.IntegrationEvents;
 
 /// <summary>
-/// The rule that matters for every publish site: the event goes out after the
-/// write, and a broker that is down never fails the request.
+/// The rule that matters for every publish site: the write and the event that
+/// announces it commit together or not at all. The broker is not in this
+/// picture any more — the publisher writes to the outbox table, so "broker
+/// down" cannot fail a request; only failing to record the event can.
 /// </summary>
 public class EventPublishingTests
 {
     private readonly Mock<IEventPublisher> _events = new();
+    private readonly RecordingUnitOfWork _unitOfWork = new();
 
-    private static readonly ErrorOr<Success> BrokerDown = Error.Failure(
-        "Events.PublishFailed", "Could not publish: connection refused.");
+    private static readonly ErrorOr<Success> NotRecorded = Error.Unexpected(
+        "Events.NotRecorded", "Could not record the event.");
 
-    private void GivenTheBrokerIsDown() =>
+    private void GivenTheEventCannotBeRecorded() =>
         _events.Setup(e => e.PublishAsync(
                    It.IsAny<It.IsAnyType>(), It.IsAny<CancellationToken>()))
-               .ReturnsAsync(BrokerDown);
+               .ReturnsAsync(NotRecorded);
 
     // ---------- BookBorrowed ----------
 
@@ -50,6 +55,7 @@ public class EventPublishingTests
             _members.Object,
             new FixedLoanPolicy(),
             _events.Object,
+            _unitOfWork,
             NullLogger<AddLoanCommandHandler>.Instance);
 
     private void GivenALendableBookAndMember()
@@ -84,16 +90,35 @@ public class EventPublishingTests
     }
 
     [Fact]
-    public async Task Lending_still_succeeds_when_the_broker_is_down()
+    public async Task Lending_commits_the_loan_and_its_event_together()
     {
         GivenALendableBookAndMember();
-        GivenTheBrokerIsDown();
 
         var result = await CreateLendSut().Handle(
             new AddLoanCommand(BookId: 1, MemberId: 2), CancellationToken.None);
 
         Assert.False(result.IsError);
         Assert.Equal(99, result.Value.Id);
+        Assert.Equal(1, _unitOfWork.Commits);
+        Assert.Equal(0, _unitOfWork.Rollbacks);
+    }
+
+    // A loan nobody is told about is the inconsistency the outbox exists to
+    // prevent, so the loan goes too.
+    [Fact]
+    public async Task Lending_is_rolled_back_when_its_event_cannot_be_recorded()
+    {
+        GivenALendableBookAndMember();
+        GivenTheEventCannotBeRecorded();
+
+        var result = await CreateLendSut().Handle(
+            new AddLoanCommand(BookId: 1, MemberId: 2), CancellationToken.None);
+
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.Equal("Events.NotRecorded", result.FirstError.Code);
+        Assert.Equal(0, _unitOfWork.Commits);
+        Assert.Equal(1, _unitOfWork.Rollbacks);
     }
 
     // The loan row must exist before anyone is told about it, or a consumer
@@ -116,7 +141,7 @@ public class EventPublishingTests
     // ---------- BookReturned ----------
 
     private ReturnLoanCommandHandler CreateReturnSut() =>
-        new(_loans.Object, _events.Object, NullLogger<ReturnLoanCommandHandler>.Instance);
+        new(_loans.Object, _events.Object, _unitOfWork, NullLogger<ReturnLoanCommandHandler>.Instance);
 
     private void GivenAnOpenLoan(DateTime dueAt)
     {
@@ -144,6 +169,20 @@ public class EventPublishingTests
         _events.Verify(e => e.PublishAsync(
             It.Is<BookReturned>(evt => evt.LoanId == 5 && evt.BookId == 1 && evt.MemberId == 2),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Returning_is_rolled_back_when_its_event_cannot_be_recorded()
+    {
+        GivenAnOpenLoan(DateTime.UtcNow.AddDays(3));
+        GivenTheEventCannotBeRecorded();
+
+        var result = await CreateReturnSut().Handle(new ReturnLoanCommand(5), CancellationToken.None);
+
+        Assert.True(result.IsError);
+        Assert.Equal("Events.NotRecorded", result.FirstError.Code);
+        Assert.Equal(1, _unitOfWork.Rollbacks);
+        Assert.Equal(0, _unitOfWork.Commits);
     }
 
     // WasOverdue is computed on the event, so a consumer cannot disagree with
@@ -192,6 +231,7 @@ public class EventPublishingTests
             _members.Object,
             _jobs.Object,
             _events.Object,
+            _unitOfWork,
             NullLogger<global::RegisterCommandHandler>.Instance);
 
     private void GivenRegistrationSucceeds()
@@ -245,17 +285,22 @@ public class EventPublishingTests
             It.IsAny<MemberRegistered>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // The account already exists, so registration still succeeds — but the
+    // member and its event go together, and the welcome email is independent
+    // of both.
     [Fact]
-    public async Task Registering_still_succeeds_and_still_queues_the_email_when_the_broker_is_down()
+    public async Task Registering_rolls_back_the_member_but_still_succeeds_and_queues_the_email_when_the_event_cannot_be_recorded()
     {
         GivenRegistrationSucceeds();
-        GivenTheBrokerIsDown();
+        GivenTheEventCannotBeRecorded();
 
         var result = await CreateRegisterSut().Handle(
             new RegisterCommand("ada", "Pa55word!", "ada@example.com"),
             CancellationToken.None);
 
         Assert.False(result.IsError);
+        Assert.Equal(1, _unitOfWork.Rollbacks);
+        Assert.Equal(0, _unitOfWork.Commits);
         _jobs.Verify(c => c.Create(
             It.Is<Job>(job => job.Type == typeof(SendWelcomeEmailJob)),
             It.Is<IState>(state => state is EnqueuedState)), Times.Once);

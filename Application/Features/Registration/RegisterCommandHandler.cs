@@ -17,6 +17,7 @@ public class RegisterCommandHandler
     private readonly IMembersRepository _membersRepository;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IEventPublisher _events;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<RegisterCommandHandler> _logger;
 
     public RegisterCommandHandler(
@@ -24,12 +25,14 @@ public class RegisterCommandHandler
         IMembersRepository membersRepository,
         IBackgroundJobClient backgroundJobClient,
         IEventPublisher events,
+        IUnitOfWork unitOfWork,
         ILogger<RegisterCommandHandler> logger)
     {
         _identityService = identityService;
         _membersRepository = membersRepository;
         _backgroundJobClient = backgroundJobClient;
         _events = events;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -54,18 +57,7 @@ public class RegisterCommandHandler
             return user.Errors;
         }
 
-        var memberId = await LinkMemberAsync(user.Value, cancellationToken);
-
-        if (memberId is not null)
-        {
-            await _events.PublishAsync(
-                new MemberRegistered(
-                    user.Value.Username,
-                    user.Value.Email,
-                    memberId.Value,
-                    DateTime.UtcNow),
-                cancellationToken);
-        }
+        await LinkMemberAsync(user.Value, cancellationToken);
 
         // The account already exists at this point. If Hangfire cannot take the
         // job — its schema missing on a fresh database, the SQL user lacking
@@ -93,30 +85,53 @@ public class RegisterCommandHandler
         return user.Value;
     }
 
-    private async Task<int?> LinkMemberAsync(
+    // Failures are logged, not returned: the account exists and registration
+    // has succeeded. A failed link also means no MemberRegistered, which
+    // carries a member id there would be nothing honest to put in — the
+    // member and its event commit together or not at all.
+    private async Task LinkMemberAsync(
         RegisteredUserDTO user,
         CancellationToken cancellationToken)
     {
         try
         {
-            var existing = await _membersRepository.GetMemberByIdentityUserIdAsync(
-                user.UserId,
-                cancellationToken);
-
-            if (existing is not null)
+            var linked = await _unitOfWork.ExecuteInTransactionAsync<int>(async token =>
             {
-                return existing.Id;
-            }
+                var member = await _membersRepository.GetMemberByIdentityUserIdAsync(
+                    user.UserId,
+                    token);
 
-            var member = await _membersRepository.AddMemberAsync(
-                new MemberModel
+                member ??= await _membersRepository.AddMemberAsync(
+                    new MemberModel
+                    {
+                        Name = user.Username,
+                        IdentityUserId = user.UserId
+                    },
+                    token);
+
+                var published = await _events.PublishAsync(
+                    new MemberRegistered(
+                        user.Username,
+                        user.Email,
+                        member.Id,
+                        DateTime.UtcNow),
+                    token);
+
+                if (published.IsError)
                 {
-                    Name = user.Username,
-                    IdentityUserId = user.UserId
-                },
-                cancellationToken);
+                    return published.Errors;
+                }
 
-            return member.Id;
+                return member.Id;
+            }, cancellationToken);
+
+            if (linked.IsError)
+            {
+                _logger.LogError(
+                    "Registered {Username} but could not create their library member: {ErrorCode}.",
+                    user.Username,
+                    linked.FirstError.Code);
+            }
         }
         catch (Exception exception)
         {
@@ -124,11 +139,6 @@ public class RegisterCommandHandler
                 exception,
                 "Registered {Username} but could not create their library member.",
                 user.Username);
-
-            // Null, not a throw: the account exists and registration has
-            // succeeded. It also suppresses MemberRegistered, which carries a
-            // member id there would be nothing honest to put in.
-            return null;
         }
     }
 }

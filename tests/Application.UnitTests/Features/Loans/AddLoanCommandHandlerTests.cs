@@ -6,6 +6,8 @@ using LibraryApi.Domain.Entities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
+using Application.UnitTests.TestDoubles;
+
 namespace Application.UnitTests.Features.Loans;
 
 public class AddLoanCommandHandlerTests
@@ -16,6 +18,7 @@ public class AddLoanCommandHandlerTests
     private readonly Mock<IBooksRepository> _books = new();
     private readonly Mock<IMembersRepository> _members = new();
     private readonly Mock<IEventPublisher> _events = new();
+    private readonly RecordingUnitOfWork _unitOfWork = new();
 
     // A stub rather than a mock: the policy is pure arithmetic, and a fixed
     // period makes the due-date assertion exact.
@@ -33,6 +36,7 @@ public class AddLoanCommandHandlerTests
             _members.Object,
             new FixedLoanPolicy(),
             _events.Object,
+            _unitOfWork,
             NullLogger<AddLoanCommandHandler>.Instance);
 
     private void GivenBookExists(int id = 1, int totalCopies = 1) =>

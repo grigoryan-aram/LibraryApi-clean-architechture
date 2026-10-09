@@ -6,14 +6,17 @@ using LibraryApi.Domain.Entities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
+using Application.UnitTests.TestDoubles;
+
 namespace Application.UnitTests.Features.Loans;
 
 public class ReturnLoanCommandHandlerTests
 {
     private readonly Mock<ILoansRepository> _loans = new();
     private readonly Mock<IEventPublisher> _events = new();
+    private readonly RecordingUnitOfWork _unitOfWork = new();
 
-    private ReturnLoanCommandHandler CreateSut() => new(_loans.Object, _events.Object, NullLogger<ReturnLoanCommandHandler>.Instance);
+    private ReturnLoanCommandHandler CreateSut() => new(_loans.Object, _events.Object, _unitOfWork, NullLogger<ReturnLoanCommandHandler>.Instance);
 
     private void GivenLoan(LoanModel? loan) =>
         _loans.Setup(repo => repo.GetLoanByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))

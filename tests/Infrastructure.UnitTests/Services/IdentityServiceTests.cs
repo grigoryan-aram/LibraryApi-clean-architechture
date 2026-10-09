@@ -94,4 +94,26 @@ public class IdentityServiceTests
         _userManager.Verify(manager => manager.AddToRoleAsync(
             It.IsAny<IdentityUser>(), It.IsAny<string>()), Times.Never);
     }
+
+    [Fact]
+    public async Task FindContact_returns_the_username_and_address_for_an_account()
+    {
+        _userManager.Setup(m => m.FindByIdAsync("user-1"))
+                    .ReturnsAsync(new IdentityUser { Id = "user-1", UserName = "ada", Email = "ada@example.com" });
+
+        var contact = await CreateSut().FindContactAsync("user-1", CancellationToken.None);
+
+        Assert.NotNull(contact);
+        Assert.Equal("ada", contact.Username);
+        Assert.Equal("ada@example.com", contact.Email);
+    }
+
+    [Fact]
+    public async Task FindContact_returns_null_for_an_account_with_no_address()
+    {
+        _userManager.Setup(m => m.FindByIdAsync("user-1"))
+                    .ReturnsAsync(new IdentityUser { Id = "user-1", UserName = "ada", Email = null });
+
+        Assert.Null(await CreateSut().FindContactAsync("user-1", CancellationToken.None));
+    }
 }

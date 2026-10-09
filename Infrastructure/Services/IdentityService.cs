@@ -117,6 +117,20 @@ namespace Infrastructure.Services
             return new PasswordResetTargetDTO(user.Id, user.UserName, user.Email);
         }
 
+        public async Task<AccountContactDTO?> FindContactAsync(
+            string identityUserId,
+            CancellationToken cancellationToken)
+        {
+            var user = await _userManager.FindByIdAsync(identityUserId);
+
+            if (user is null || user.Email is null || user.UserName is null)
+            {
+                return null;
+            }
+
+            return new AccountContactDTO(user.UserName, user.Email);
+        }
+
         public async Task<ErrorOr<Success>> ResetPasswordAsync(
             string identityUserId,
             string newPassword,

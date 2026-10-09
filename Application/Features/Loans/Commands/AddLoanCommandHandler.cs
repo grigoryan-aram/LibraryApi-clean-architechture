@@ -17,6 +17,7 @@ namespace Application.Features.Loans.Commands
         private readonly IMembersRepository _membersRepository;
         private readonly ILoanPolicy _loanPolicy;
         private readonly IEventPublisher _events;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<AddLoanCommandHandler> _logger;
 
         public AddLoanCommandHandler(
@@ -25,6 +26,7 @@ namespace Application.Features.Loans.Commands
             IMembersRepository membersRepository,
             ILoanPolicy loanPolicy,
             IEventPublisher events,
+            IUnitOfWork unitOfWork,
             ILogger<AddLoanCommandHandler> logger)
         {
             _loansRepository = loansRepository;
@@ -32,6 +34,7 @@ namespace Application.Features.Loans.Commands
             _membersRepository = membersRepository;
             _loanPolicy = loanPolicy;
             _events = events;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -101,41 +104,55 @@ namespace Application.Features.Loans.Commands
                 ReturnedAt = null
             };
 
-            var result = await _loansRepository.AddLoanAsync(loan, cancellationToken);
-
-            if (result == null)
+            // The loan and its BookBorrowed event commit together or not at
+            // all. The event needs the loan's generated id, so these are two
+            // saves, and the transaction is what makes them one.
+            var lent = await _unitOfWork.ExecuteInTransactionAsync<LoanModel>(async token =>
             {
-                _logger.LogError(
-                    "The loans repository returned no row when lending book " +
-                    "{BookId} to member {MemberId}.",
-                    request.BookId,
-                    request.MemberId);
+                var saved = await _loansRepository.AddLoanAsync(loan, token);
 
-                return Error.Failure("Loans.NotCreated", "Could not add the loan.");
+                if (saved == null)
+                {
+                    _logger.LogError(
+                        "The loans repository returned no row when lending book " +
+                        "{BookId} to member {MemberId}.",
+                        request.BookId,
+                        request.MemberId);
+
+                    return Error.Failure("Loans.NotCreated", "Could not add the loan.");
+                }
+
+                var published = await _events.PublishAsync(
+                    new BookBorrowed(
+                        saved.Id,
+                        saved.BookId,
+                        book.Title,
+                        saved.MemberId,
+                        saved.BorrowedAt,
+                        saved.DueAt),
+                    token);
+
+                if (published.IsError)
+                {
+                    return published.Errors;
+                }
+
+                return saved;
+            }, cancellationToken);
+
+            if (lent.IsError)
+            {
+                return lent.Errors;
             }
 
             _logger.LogInformation(
                 "Lent book {BookId} to member {MemberId} as loan {LoanId}, due {DueAt:u}.",
-                result.BookId,
-                result.MemberId,
-                result.Id,
-                result.DueAt);
+                lent.Value.BookId,
+                lent.Value.MemberId,
+                lent.Value.Id,
+                lent.Value.DueAt);
 
-            // After the write, and its failure is not the caller's problem —
-            // the loan is already committed, so a broker that is down must not
-            // turn a lent book into an error they would retry. The publisher
-            // logs and returns rather than throwing.
-            await _events.PublishAsync(
-                new BookBorrowed(
-                    result.Id,
-                    result.BookId,
-                    book.Title,
-                    result.MemberId,
-                    result.BorrowedAt,
-                    result.DueAt),
-                cancellationToken);
-
-            return result.Adapt<LoansDTO>();
+            return lent.Value.Adapt<LoansDTO>();
         }
     }
 }

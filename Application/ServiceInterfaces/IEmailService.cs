@@ -15,5 +15,18 @@ namespace Application.ServiceInterfaces
             string email,
             string username,
             string code);
+
+        Task<ErrorOr<Success>> SendLoanReceiptEmailAsync(
+            string email,
+            string username,
+            string bookTitle,
+            DateTime dueAt);
+
+        Task<ErrorOr<Success>> SendReturnReceiptEmailAsync(
+            string email,
+            string username,
+            string bookTitle,
+            DateTime returnedAt,
+            bool wasOverdue);
     }
 }
