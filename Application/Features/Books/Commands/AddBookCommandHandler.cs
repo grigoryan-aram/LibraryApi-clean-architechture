@@ -44,7 +44,7 @@ namespace Application.Features.Books.Commands
                     "Books.CategoryNotFound",
                     $"No category with id {request.CategoryId}.");
             }
-
+                
             var book = await _booksRepository.AddAsync(
                 request.Adapt<BookModel>(),
                 cancellationToken);

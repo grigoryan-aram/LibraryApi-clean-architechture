@@ -61,7 +61,7 @@ namespace Infrastructure.Messaging
                     $"{PublishTimeout.TotalSeconds} seconds.");
             }
             catch (Exception exception)
-            {
+            { 
                 // Mapped rather than rethrown, at the boundary where the
                 // third-party library throws — the same treatment ClaudeService
                 // gives the Anthropic SDK. A broker outage is not the caller's

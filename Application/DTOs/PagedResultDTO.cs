@@ -10,7 +10,7 @@ namespace Application.DTOs
     /// fills constructor parameters and leaves get-only members alone, so they
     /// cannot drift out of step with <c>TotalCount</c>.
     /// </remarks>
-    public record PagedResult<T>(
+    public record PagedResultDTO<T>(
         IReadOnlyList<T> Items,
         int Page,
         int PageSize,
