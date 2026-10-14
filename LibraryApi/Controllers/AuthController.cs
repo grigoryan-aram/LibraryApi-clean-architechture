@@ -1,11 +1,14 @@
 ﻿using Application.DTOs;
+using Application.Features.Accounts;
 using Application.Features.Login.Commands;
 using Application.Features.PasswordReset;
 using Application.Features.Registration;
 using LibraryApi.Extensions;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 
 namespace LibraryApi.Controllers;
@@ -87,6 +90,32 @@ namespace LibraryApi.Controllers;
                 _ => Ok(new
                 {
                     Message = "Password changed. Sign in with your new password."
+                }),
+                errors => this.ToProblem(errors));
+        }
+
+        /// <summary>
+        /// Deletes the signed-in caller's own account and signs them out.
+        /// </summary>
+        /// <remarks>
+        /// Refused while any book is still on loan. Past loans are kept, on a
+        /// member record that no longer names the account.
+        /// </remarks>
+        [Authorize]
+        [HttpPost("delete-account")]
+        public async Task<IActionResult> DeleteAccount([FromBody] DeleteAccountDTO request)
+        {
+            // From the cookie, never the body: see DeleteAccountCommand.
+            var identityUserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+            var result = await _mediator.Send(new DeleteAccountCommand(
+                identityUserId,
+                request.Password));
+
+            return result.Match(
+                _ => Ok(new
+                {
+                    Message = "Your account has been deleted."
                 }),
                 errors => this.ToProblem(errors));
         }

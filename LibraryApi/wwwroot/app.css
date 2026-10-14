@@ -259,6 +259,37 @@ a {
     margin-top: 6px;
 }
 
+.btn-danger {
+    background: rgb(255 107 107 / 12%);
+    border-color: rgb(255 107 107 / 45%);
+    color: #ffc9c9;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: rgb(255 107 107 / 22%);
+}
+
+/* ---------- account deletion ---------- */
+
+.danger-zone {
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    text-align: left;
+}
+
+.danger-zone > summary {
+    cursor: pointer;
+    color: var(--danger);
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.danger-zone > p {
+    font-size: 13.5px;
+    margin: 12px 0 14px;
+}
+
 /* ---------- home ---------- */
 
 .hero {

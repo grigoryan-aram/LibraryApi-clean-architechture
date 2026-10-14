@@ -1,7 +1,11 @@
 @page "/account"
 
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Identity
+@using global::Application.Features.Accounts
 @inject SignInManager<IdentityUser> SignInManager
+@inject IMediator Mediator
 @inject NavigationManager Nav
 
 @* Static-SSR, like the sign-in page: signing out clears the auth cookie, and
@@ -49,11 +53,49 @@
                         <button class="btn btn-ghost" type="submit">Sign out</button>
                     </form>
                 </div>
+
+                @if (!auth.User.IsInRole(Roles.Admin))
+                {
+                    @* <details> keeps the form folded away without needing an
+                       interactive circuit; it opens itself again after a failed
+                       attempt so the error is visible. *@
+                    <details class="danger-zone" open="@(_deleteError is not null)">
+                        <summary>Delete account</summary>
+
+                        <p class="muted">
+                            This removes your sign-in for good. Any books you have out must be
+                            returned first. Your past loans stay on the library's records, but
+                            no longer under your name.
+                        </p>
+
+                        @if (_deleteError is not null)
+                        {
+                            <div class="alert alert-error" role="alert">@_deleteError</div>
+                        }
+
+                        <EditForm Model="DeleteModel" FormName="delete-account" OnValidSubmit="DeleteAccountAsync" method="post">
+                            <DataAnnotationsValidator />
+
+                            <label class="field">
+                                <span>Confirm with your password</span>
+                                <InputText type="password" @bind-Value="DeleteModel!.Password" autocomplete="current-password" />
+                                <ValidationMessage For="() => DeleteModel!.Password" />
+                            </label>
+
+                            <button class="btn btn-danger btn-block" type="submit">Delete my account</button>
+                        </EditForm>
+                    </details>
+                }
             </div>
         </Authorized>
 
         <NotAuthorized>
             <div class="panel panel-single">
+                @if (Deleted)
+                {
+                    <div class="alert alert-ok" role="status">Your account has been deleted.</div>
+                }
+
                 <span class="panel-glyph">→</span>
                 <h2>You are not signed in</h2>
 
@@ -72,9 +114,55 @@
 </section>
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    [SupplyParameterFromQuery(Name = "deleted")]
+    private bool Deleted { get; set; }
+
+    // Same shape as LoginModel on /login — see the comment there.
+    [SupplyParameterFromForm(FormName = "delete-account")]
+    private DeleteAccountInput? DeleteModel { get; set; }
+
+    private string? _deleteError;
+
+    protected override void OnInitialized()
+    {
+        DeleteModel ??= new DeleteAccountInput();
+    }
+
     private async Task SignOutAsync()
     {
         await SignInManager.SignOutAsync();
         Nav.NavigateTo("", forceLoad: true);
+    }
+
+    private async Task DeleteAccountAsync()
+    {
+        var state = await AuthenticationState!;
+
+        // From the cookie, never the form — see DeleteAccountCommand.
+        var identityUserId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+        // Same handler as POST /api/Auth/delete-account. It signs the caller
+        // out itself; this is a static-SSR post, so the response is still open
+        // for the cookie to be cleared on.
+        var result = await Mediator.Send(new DeleteAccountCommand(
+            identityUserId,
+            DeleteModel!.Password));
+
+        if (result.IsError)
+        {
+            _deleteError = result.FirstError.Description;
+            return;
+        }
+
+        Nav.NavigateTo("account?deleted=true", forceLoad: true);
+    }
+
+    private sealed class DeleteAccountInput
+    {
+        [Required(ErrorMessage = "Enter your password to confirm.")]
+        public string Password { get; set; } = string.Empty;
     }
 }

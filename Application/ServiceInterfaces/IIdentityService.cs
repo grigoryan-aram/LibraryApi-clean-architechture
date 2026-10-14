@@ -38,5 +38,24 @@ namespace Application.ServiceInterfaces
             string identityUserId,
             string newPassword,
             CancellationToken cancellationToken);
+
+        // Unauthorized for a wrong password and for an id with no account
+        // alike — the caller is re-confirming who they are, not looking up.
+        Task<ErrorOr<Success>> CheckPasswordAsync(
+            string identityUserId,
+            string password,
+            CancellationToken cancellationToken);
+
+        Task<bool> IsInRoleAsync(
+            string identityUserId,
+            string role,
+            CancellationToken cancellationToken);
+
+        Task<ErrorOr<Deleted>> DeleteAccountAsync(
+            string identityUserId,
+            CancellationToken cancellationToken);
+
+        // Clears the auth cookie on the current request.
+        Task SignOutAsync();
     }
 }

@@ -168,6 +168,61 @@ namespace Infrastructure.Services
 
             return Result.Success;
         }
+
+        public async Task<ErrorOr<Success>> CheckPasswordAsync(
+            string identityUserId,
+            string password,
+            CancellationToken cancellationToken)
+        {
+            var user = await _userManager.FindByIdAsync(identityUserId);
+
+            if (user is null || !await _userManager.CheckPasswordAsync(user, password))
+            {
+                return Error.Unauthorized(
+                    "Account.InvalidPassword",
+                    "That password is not correct.");
+            }
+
+            return Result.Success;
+        }
+
+        public async Task<bool> IsInRoleAsync(
+            string identityUserId,
+            string role,
+            CancellationToken cancellationToken)
+        {
+            var user = await _userManager.FindByIdAsync(identityUserId);
+
+            return user is not null && await _userManager.IsInRoleAsync(user, role);
+        }
+
+        public async Task<ErrorOr<Deleted>> DeleteAccountAsync(
+            string identityUserId,
+            CancellationToken cancellationToken)
+        {
+            var user = await _userManager.FindByIdAsync(identityUserId);
+
+            if (user is null)
+            {
+                return Error.NotFound(
+                    "Account.NotFound",
+                    "That account no longer exists.");
+            }
+
+            // Identity removes the account's roles, claims and logins with it.
+            var result = await _userManager.DeleteAsync(user);
+
+            if (!result.Succeeded)
+            {
+                return Error.Unexpected(
+                    "Account.NotDeleted",
+                    string.Join(" ", result.Errors.Select(error => error.Description)));
+            }
+
+            return Result.Deleted;
+        }
+
+        public Task SignOutAsync() => _signInManager.SignOutAsync();
     }
 
 }

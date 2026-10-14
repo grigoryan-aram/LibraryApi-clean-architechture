@@ -56,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (306 tests across three projects, all passing):
+Test (321 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -194,7 +194,7 @@ An Identity account and a library member are separate, joined by **`MemberModel.
 
 ### Password reset
 
-`POST /api/Auth/forgot-password { email }` emails a 7-character code (`VK35oeQ`) through the same Hangfire path as the welcome email; `POST /api/Auth/reset-password { email, code, newPassword }` checks it and has Identity set the password, which rotates the security stamp and so signs out that account's existing cookies. The Blazor equivalent is `/forgot-password`.
+`POST /api/Auth/forgot-password { email }` emails a 7-character code (`VK35oeQ`) through the same Hangfire path as the welcome email; `POST /api/Auth/reset-password { email, code, newPassword }` checks it and has Identity set the password, which rotates the security stamp and so signs out that account's existing cookies — within a minute, not instantly (see **Deleting an account**). The Blazor equivalent is `/forgot-password`.
 
 - **Only a SHA-256 hash of the upper-cased code is stored**, and the code is never logged — there is a test for each. Matching ignores case and surrounding space, which costs entropy (36^7 rather than 62^7) and saves a wasted attempt when a phone keyboard capitalises it.
 - **Three controls, in `Domain/Constants/PasswordResetRules.cs`:** a 15-minute expiry, one live code per account (issuing a new one deletes the old), and five wrong guesses. **The attempt cap is the one that matters** — the `"fixed"` rate limiter still allows tens of thousands of tries a day per address.
@@ -202,6 +202,15 @@ An Identity account and a library member are separate, joined by **`MemberModel.
 - **`forgot-password` returns Success even when the code cannot be stored or queued**, for the same reason, and logs at Error instead. A failure there is invisible to the caller by design.
 - Identity keeps ownership of password strength; its complaints pass through and leave the code usable for a retry.
 - Codes are generated from mixed-case alphanumerics, so `O`/`0` and `1`/`I` can both appear. Dropping `0O1lI` from the alphabet is the fix if transcription errors ever become a complaint.
+
+### Deleting an account
+
+`POST /api/Auth/delete-account { password }` (`[Authorize]`, on an otherwise anonymous controller) and the folded "Delete account" section on `/account` both send `DeleteAccountCommand` → `DeleteAccountCommandHandler`. Like `/api/Loans/mine`, the user id comes from `ClaimTypes.NameIdentifier`, **never the body**.
+
+- **The current password is required**, not just the cookie: `Account.InvalidPassword` (401).
+- **Refused while any book is out** (`Account.HasOpenLoans`, 409), and **refused for `Admin`** (`Account.AdminCannotBeDeleted`, 409) because `IdentitySeeder` would recreate it on the next start. The section is hidden from admins on the page.
+- **The member row is kept, not deleted** — its loans are the library's record of where books went. It is unlinked (`IdentityUserId = null`) and renamed `Former member #<id>`. Nothing in the schema ties a member or a reset code to `AspNetUsers`, so the handler does the unlink, the reset-code delete and `UserManager.DeleteAsync` itself, **in one `IUnitOfWork` transaction**, then signs out. Identity's own cascades remove roles, claims and logins.
+- **A copy of the old cookie keeps working for up to `SecurityStampValidatorOptions.ValidationInterval`**, which `Program.cs` sets to **1 minute**. Identity's default is 30; measured, a copied cookie of a deleted account still answered 200 with it. At 1 minute: 200 immediately, 401 at 65 s. Do not set it to zero — the validator then re-issues the cookie on every response.
 
 ### Staying signed in
 

@@ -9,6 +9,7 @@ using LibraryApi.Extensions;
 using LibraryApi.MiddleWares;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -129,6 +130,14 @@ builder.Services.ConfigureApplicationCookie(options =>
         ? CookieSecurePolicy.Always
         : CookieSecurePolicy.SameAsRequest;
 });
+
+// How often a cookie is checked against the database. Identity's default is
+// 30 minutes, and measured: a copy of the cookie of a just-deleted account
+// still answered 200 — the same window applies after a password reset. One
+// minute bounds that at the cost of one user lookup per cookie per minute.
+// Not zero: that would re-issue the cookie on every response.
+builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+    options.ValidationInterval = TimeSpan.FromMinutes(1));
 
 
 

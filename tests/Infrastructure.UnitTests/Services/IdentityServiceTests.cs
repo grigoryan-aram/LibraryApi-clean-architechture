@@ -116,4 +116,66 @@ public class IdentityServiceTests
 
         Assert.Null(await CreateSut().FindContactAsync("user-1", CancellationToken.None));
     }
+
+    private static readonly IdentityUser Ada = new() { Id = "user-1", UserName = "ada" };
+
+    [Fact]
+    public async Task CheckPassword_refuses_a_wrong_password_as_unauthorized()
+    {
+        _userManager.Setup(m => m.FindByIdAsync("user-1")).ReturnsAsync(Ada);
+        _userManager.Setup(m => m.CheckPasswordAsync(Ada, "wrong")).ReturnsAsync(false);
+
+        var result = await CreateSut().CheckPasswordAsync("user-1", "wrong", CancellationToken.None);
+
+        Assert.Equal(ErrorOr.ErrorType.Unauthorized, result.FirstError.Type);
+        Assert.Equal("Account.InvalidPassword", result.FirstError.Code);
+    }
+
+    // Same answer as a wrong password: the caller is confirming who they are,
+    // and a vanished account should not be told apart.
+    [Fact]
+    public async Task CheckPassword_refuses_an_unknown_account_the_same_way()
+    {
+        _userManager.Setup(m => m.FindByIdAsync(It.IsAny<string>())).ReturnsAsync((IdentityUser?)null);
+
+        var result = await CreateSut().CheckPasswordAsync("gone", "Pa55word!", CancellationToken.None);
+
+        Assert.Equal("Account.InvalidPassword", result.FirstError.Code);
+    }
+
+    [Fact]
+    public async Task CheckPassword_accepts_the_right_password()
+    {
+        _userManager.Setup(m => m.FindByIdAsync("user-1")).ReturnsAsync(Ada);
+        _userManager.Setup(m => m.CheckPasswordAsync(Ada, "Pa55word!")).ReturnsAsync(true);
+
+        var result = await CreateSut().CheckPasswordAsync("user-1", "Pa55word!", CancellationToken.None);
+
+        Assert.False(result.IsError);
+    }
+
+    [Fact]
+    public async Task DeleteAccount_reports_an_identity_refusal_as_unexpected()
+    {
+        _userManager.Setup(m => m.FindByIdAsync("user-1")).ReturnsAsync(Ada);
+        _userManager.Setup(m => m.DeleteAsync(Ada)).ReturnsAsync(IdentityResult.Failed(
+            new IdentityError { Description = "Optimistic concurrency failure." }));
+
+        var result = await CreateSut().DeleteAccountAsync("user-1", CancellationToken.None);
+
+        Assert.Equal(ErrorOr.ErrorType.Unexpected, result.FirstError.Type);
+        Assert.Equal("Account.NotDeleted", result.FirstError.Code);
+    }
+
+    [Fact]
+    public async Task DeleteAccount_deletes_the_user()
+    {
+        _userManager.Setup(m => m.FindByIdAsync("user-1")).ReturnsAsync(Ada);
+        _userManager.Setup(m => m.DeleteAsync(Ada)).ReturnsAsync(IdentityResult.Success);
+
+        var result = await CreateSut().DeleteAccountAsync("user-1", CancellationToken.None);
+
+        Assert.False(result.IsError);
+        _userManager.Verify(m => m.DeleteAsync(Ada), Times.Once);
+    }
 }
