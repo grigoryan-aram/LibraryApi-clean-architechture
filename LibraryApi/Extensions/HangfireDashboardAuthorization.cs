@@ -9,7 +9,7 @@ namespace LibraryApi.Extensions
     // this asks for the Admin role.
     //
     // Hangfire's dashboard has no notion of challenge or redirect — a false
-    // here is a flat 401, for an anonymous visitor and a signed-in non-adminsq
+    // here is a flat 401, for an anonymous visitor and a signed-in non-admin
     // alike.
     public class HangfireDashboardAuthorization : IDashboardAuthorizationFilter
     {
