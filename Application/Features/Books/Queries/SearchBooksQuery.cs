@@ -17,5 +17,5 @@ namespace Application.Features.Books.Queries
         string? Search = null,
         string? SortBy = null,
         bool Descending = false)
-        : IRequest<ErrorOr<PagedResult<BooksDTO>>>;
+        : IRequest<ErrorOr<PagedResultDTO<BooksDTO>>>;
 }

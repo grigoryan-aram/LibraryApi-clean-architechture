@@ -64,6 +64,7 @@ builder.Services.AddRateLimiter(options =>
     // Partitioned per caller. AddFixedWindowLimiter would give every client
     // in the world one shared bucket of 100, so a single busy caller could
     // lock everyone else out. Signed-in callers are keyed by name; everyone
+
     // else by remote address.
     options.AddPolicy("fixed", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -181,7 +182,7 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
-
+    
 
 // After authentication on purpose: the policy partitions on the signed-in
 // user name, which is not populated until UseAuthentication has run.

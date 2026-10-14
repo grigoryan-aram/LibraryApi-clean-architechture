@@ -1,4 +1,4 @@
-using LibraryApi.Domain.Entities;
+    using LibraryApi.Domain.Entities;
 
 namespace LibraryApi.Domain.RepositoryInterfaces
 {

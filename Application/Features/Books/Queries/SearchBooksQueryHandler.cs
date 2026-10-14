@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace Application.Features.Books.Queries
 {
     public class SearchBooksQueryHandler
-        : IRequestHandler<SearchBooksQuery, ErrorOr<PagedResult<BooksDTO>>>
+        : IRequestHandler<SearchBooksQuery, ErrorOr<PagedResultDTO<BooksDTO>>>
     {
         private readonly IBooksRepository _booksRepository;
         private readonly ILoansRepository _loansRepository;
@@ -24,7 +24,7 @@ namespace Application.Features.Books.Queries
             _logger = logger;
         }
 
-        public async Task<ErrorOr<PagedResult<BooksDTO>>> Handle(
+        public async Task<ErrorOr<PagedResultDTO<BooksDTO>>> Handle(
             SearchBooksQuery request,
             CancellationToken cancellationToken)
         {
@@ -59,7 +59,7 @@ namespace Application.Features.Books.Queries
                 totalCount,
                 request.Search ?? "(none)");
 
-            return new PagedResult<BooksDTO>(
+            return new PagedResultDTO<BooksDTO>(
                 items,
                 request.Page,
                 request.PageSize,
