@@ -55,6 +55,16 @@ namespace Application.ServiceInterfaces
             string identityUserId,
             CancellationToken cancellationToken);
 
+        // Unauthorized for a wrong current password; Identity's own complaints
+        // about the new one come back as Validation errors. On success the
+        // current request's cookie is re-issued, so the caller stays signed in
+        // while their other sessions are not.
+        Task<ErrorOr<Success>> ChangePasswordAsync(
+            string identityUserId,
+            string currentPassword,
+            string newPassword,
+            CancellationToken cancellationToken);
+
         // Clears the auth cookie on the current request.
         Task SignOutAsync();
     }

@@ -178,9 +178,7 @@ namespace Infrastructure.Services
 
             if (user is null || !await _userManager.CheckPasswordAsync(user, password))
             {
-                return Error.Unauthorized(
-                    "Account.InvalidPassword",
-                    "That password is not correct.");
+                return InvalidPassword;
             }
 
             return Result.Success;
@@ -221,6 +219,49 @@ namespace Infrastructure.Services
 
             return Result.Deleted;
         }
+
+        public async Task<ErrorOr<Success>> ChangePasswordAsync(
+            string identityUserId,
+            string currentPassword,
+            string newPassword,
+            CancellationToken cancellationToken)
+        {
+            var user = await _userManager.FindByIdAsync(identityUserId);
+
+            if (user is null)
+            {
+                return InvalidPassword;
+            }
+
+            var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+
+            if (!result.Succeeded)
+            {
+                // Identity reports a wrong current password as just another
+                // error in the list; pull it out so it answers 401 like every
+                // other rejected credential, not 400.
+                if (result.Errors.Any(error => error.Code == nameof(IdentityErrorDescriber.PasswordMismatch)))
+                {
+                    return InvalidPassword;
+                }
+
+                return result.Errors
+                    .Select(error => Error.Validation(
+                        code: $"Identity.{error.Code}",
+                        description: error.Description))
+                    .ToList();
+            }
+
+            // The change rotated the security stamp, so this request's cookie
+            // would be rejected at its next check. Re-issue it.
+            await _signInManager.RefreshSignInAsync(user);
+
+            return Result.Success;
+        }
+
+        private static Error InvalidPassword => Error.Unauthorized(
+            "Account.InvalidPassword",
+            "That password is not correct.");
 
         public Task SignOutAsync() => _signInManager.SignOutAsync();
     }

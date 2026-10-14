@@ -56,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (321 tests across three projects, all passing):
+Test (333 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -202,6 +202,15 @@ An Identity account and a library member are separate, joined by **`MemberModel.
 - **`forgot-password` returns Success even when the code cannot be stored or queued**, for the same reason, and logs at Error instead. A failure there is invisible to the caller by design.
 - Identity keeps ownership of password strength; its complaints pass through and leave the code usable for a retry.
 - Codes are generated from mixed-case alphanumerics, so `O`/`0` and `1`/`I` can both appear. Dropping `0O1lI` from the alphabet is the fix if transcription errors ever become a complaint.
+
+### Changing a password
+
+`POST /api/Auth/change-password { currentPassword, newPassword }` (`[Authorize]`) and the "Change password" section on `/account` send `ChangePasswordCommand` → `IIdentityService.ChangePasswordAsync` → `UserManager.ChangePasswordAsync`, which checks the current password and the new one's strength in one call. The user id comes from the cookie, as for deletion.
+
+- **A wrong current password is 401 `Account.InvalidPassword`**, not 400. Identity reports it as `PasswordMismatch` inside its ordinary error list; `IdentityService` pulls it out. Strength failures pass through as `Identity.*` validation errors, all of them at once.
+- **This session stays signed in; others drop within a minute.** The change rotates the security stamp, so `IdentityService` calls `RefreshSignInAsync` to re-issue the caller's own cookie. Measured on the API: the caller's cookie still 200 after 65 s, a copy of the old one 401.
+- The validator refuses a new password equal to the current one — Identity would accept it, rotate the stamp and sign every other session out for no change. The confirm field exists on the page only.
+- **Each `<details>` section on `/account` reopens after any submit, valid or not** (`OnInvalidSubmit` sets the same flag as the handler). It used to reopen only on a handler error, so a validation message such as a mismatched confirmation rendered inside a closed section.
 
 ### Deleting an account
 

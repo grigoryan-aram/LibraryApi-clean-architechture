@@ -54,12 +54,52 @@
                     </form>
                 </div>
 
+                @* <details> keeps each form folded away without needing an
+                   interactive circuit; it opens itself again after a submit so
+                   the outcome is visible. *@
+                <details class="account-section" open="@(_passwordPosted || PasswordChanged)">
+                    <summary>Change password</summary>
+
+                    @if (PasswordChanged)
+                    {
+                        <div class="alert alert-ok" role="status">
+                            Password changed. Your other signed-in sessions will be signed out within a minute.
+                        </div>
+                    }
+
+                    @if (_passwordError is not null)
+                    {
+                        <div class="alert alert-error" role="alert">@_passwordError</div>
+                    }
+
+                    <EditForm Model="PasswordModel" FormName="change-password" OnValidSubmit="ChangePasswordAsync" OnInvalidSubmit="() => _passwordPosted = true" method="post">
+                        <DataAnnotationsValidator />
+
+                        <label class="field">
+                            <span>Current password</span>
+                            <InputText type="password" @bind-Value="PasswordModel!.CurrentPassword" autocomplete="current-password" />
+                            <ValidationMessage For="() => PasswordModel!.CurrentPassword" />
+                        </label>
+
+                        <label class="field">
+                            <span>New password</span>
+                            <InputText type="password" @bind-Value="PasswordModel!.NewPassword" autocomplete="new-password" />
+                            <ValidationMessage For="() => PasswordModel!.NewPassword" />
+                        </label>
+
+                        <label class="field">
+                            <span>Confirm new password</span>
+                            <InputText type="password" @bind-Value="PasswordModel!.ConfirmPassword" autocomplete="new-password" />
+                            <ValidationMessage For="() => PasswordModel!.ConfirmPassword" />
+                        </label>
+
+                        <button class="btn btn-primary btn-block" type="submit">Change password</button>
+                    </EditForm>
+                </details>
+
                 @if (!auth.User.IsInRole(Roles.Admin))
                 {
-                    @* <details> keeps the form folded away without needing an
-                       interactive circuit; it opens itself again after a failed
-                       attempt so the error is visible. *@
-                    <details class="danger-zone" open="@(_deleteError is not null)">
+                    <details class="account-section danger-zone" open="@_deletePosted">
                         <summary>Delete account</summary>
 
                         <p class="muted">
@@ -73,7 +113,7 @@
                             <div class="alert alert-error" role="alert">@_deleteError</div>
                         }
 
-                        <EditForm Model="DeleteModel" FormName="delete-account" OnValidSubmit="DeleteAccountAsync" method="post">
+                        <EditForm Model="DeleteModel" FormName="delete-account" OnValidSubmit="DeleteAccountAsync" OnInvalidSubmit="() => _deletePosted = true" method="post">
                             <DataAnnotationsValidator />
 
                             <label class="field">
@@ -126,9 +166,49 @@
 
     private string? _deleteError;
 
+    // Set by either submit handler, valid or not, so the section reopens
+    // with its validation messages or result showing.
+    private bool _deletePosted;
+
+    [SupplyParameterFromQuery(Name = "passwordChanged")]
+    private bool PasswordChanged { get; set; }
+
+    [SupplyParameterFromForm(FormName = "change-password")]
+    private ChangePasswordInput? PasswordModel { get; set; }
+
+    private string? _passwordError;
+
+    private bool _passwordPosted;
+
     protected override void OnInitialized()
     {
         DeleteModel ??= new DeleteAccountInput();
+        PasswordModel ??= new ChangePasswordInput();
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        _passwordPosted = true;
+
+        var state = await AuthenticationState!;
+        var identityUserId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+        // Same handler as POST /api/Auth/change-password. It re-issues this
+        // request's cookie, which works because this is a static-SSR post.
+        var result = await Mediator.Send(new ChangePasswordCommand(
+            identityUserId,
+            PasswordModel!.CurrentPassword,
+            PasswordModel!.NewPassword));
+
+        if (result.IsError)
+        {
+            // Identity can list several unmet rules at once; show them all.
+            _passwordError = string.Join(" ", result.Errors.Select(error => error.Description));
+            return;
+        }
+
+        // Redirect rather than re-render, so a refresh cannot re-post the form.
+        Nav.NavigateTo("account?passwordChanged=true", forceLoad: true);
     }
 
     private async Task SignOutAsync()
@@ -139,6 +219,8 @@
 
     private async Task DeleteAccountAsync()
     {
+        _deletePosted = true;
+
         var state = await AuthenticationState!;
 
         // From the cookie, never the form — see DeleteAccountCommand.
@@ -158,6 +240,19 @@
         }
 
         Nav.NavigateTo("account?deleted=true", forceLoad: true);
+    }
+
+    private sealed class ChangePasswordInput
+    {
+        [Required(ErrorMessage = "Enter your current password.")]
+        public string CurrentPassword { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Enter a new password.")]
+        public string NewPassword { get; set; } = string.Empty;
+
+        // Page-only: a typo in a field you cannot see would lock you out.
+        [Compare(nameof(NewPassword), ErrorMessage = "The two new passwords do not match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
     }
 
     private sealed class DeleteAccountInput

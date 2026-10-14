@@ -16,14 +16,21 @@ public class IdentityServiceTests
         new(Mock.Of<IUserStore<IdentityUser>>(),
             null!, null!, null!, null!, null!, null!, null!, null!);
 
+    private readonly Mock<SignInManager<IdentityUser>> _signInManager;
+
+    public IdentityServiceTests()
+    {
+        _signInManager = MockSignInManager(_userManager.Object);
+    }
+
     private IdentityService CreateSut() =>
         new(_userManager.Object,
-            MockSignInManager(_userManager.Object).Object,
+            _signInManager.Object,
             NullLogger<IdentityService>.Instance);
 
-    // Only there to satisfy the constructor — none of these tests sign in.
-    // SignInManager's own constructor rejects nulls for the first three, so
-    // they have to be real objects.
+    // Mostly there to satisfy the constructor; the password-change tests
+    // check it re-issues the cookie. SignInManager's own constructor rejects
+    // nulls for the first three, so they have to be real objects.
     private static Mock<SignInManager<IdentityUser>> MockSignInManager(
         UserManager<IdentityUser> userManager) =>
         new(userManager,
@@ -177,5 +184,58 @@ public class IdentityServiceTests
 
         Assert.False(result.IsError);
         _userManager.Verify(m => m.DeleteAsync(Ada), Times.Once);
+    }
+
+    private void GivenChangePasswordReturns(IdentityResult result)
+    {
+        _userManager.Setup(m => m.FindByIdAsync("user-1")).ReturnsAsync(Ada);
+        _userManager.Setup(m => m.ChangePasswordAsync(Ada, It.IsAny<string>(), It.IsAny<string>()))
+                    .ReturnsAsync(result);
+    }
+
+    // The stamp rotation that signs out other sessions would sign this one
+    // out too, a minute later, unless its cookie is re-issued.
+    [Fact]
+    public async Task ChangePassword_keeps_the_caller_signed_in()
+    {
+        GivenChangePasswordReturns(IdentityResult.Success);
+
+        var result = await CreateSut().ChangePasswordAsync(
+            "user-1", "Old-Pa55word!", "New-Pa55word!", CancellationToken.None);
+
+        Assert.False(result.IsError);
+        _signInManager.Verify(s => s.RefreshSignInAsync(Ada), Times.Once);
+    }
+
+    // Identity reports this as an ordinary error in its list. Left there it
+    // would come back as a 400 validation failure instead of a rejected
+    // credential.
+    [Fact]
+    public async Task ChangePassword_turns_a_wrong_current_password_into_unauthorized()
+    {
+        GivenChangePasswordReturns(IdentityResult.Failed(
+            new IdentityErrorDescriber().PasswordMismatch()));
+
+        var result = await CreateSut().ChangePasswordAsync(
+            "user-1", "wrong", "New-Pa55word!", CancellationToken.None);
+
+        Assert.Equal(ErrorOr.ErrorType.Unauthorized, result.FirstError.Type);
+        Assert.Equal("Account.InvalidPassword", result.FirstError.Code);
+        _signInManager.Verify(s => s.RefreshSignInAsync(It.IsAny<IdentityUser>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangePassword_passes_every_strength_complaint_through_as_validation()
+    {
+        var describer = new IdentityErrorDescriber();
+        GivenChangePasswordReturns(IdentityResult.Failed(
+            describer.PasswordRequiresDigit(), describer.PasswordTooShort(6)));
+
+        var result = await CreateSut().ChangePasswordAsync(
+            "user-1", "Old-Pa55word!", "short", CancellationToken.None);
+
+        Assert.Equal(2, result.Errors.Count);
+        Assert.All(result.Errors, error => Assert.Equal(ErrorOr.ErrorType.Validation, error.Type));
+        Assert.Contains(result.Errors, error => error.Code == "Identity.PasswordTooShort");
     }
 }

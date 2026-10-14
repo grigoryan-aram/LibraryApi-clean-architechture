@@ -95,6 +95,33 @@ namespace LibraryApi.Controllers;
         }
 
         /// <summary>
+        /// Changes the signed-in caller's password, given the current one.
+        /// </summary>
+        /// <remarks>
+        /// This session stays signed in; the account's other sessions are
+        /// signed out within a minute.
+        /// </remarks>
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDTO request)
+        {
+            // From the cookie, never the body: see ChangePasswordCommand.
+            var identityUserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+            var result = await _mediator.Send(new ChangePasswordCommand(
+                identityUserId,
+                request.CurrentPassword,
+                request.NewPassword));
+
+            return result.Match(
+                _ => Ok(new
+                {
+                    Message = "Password changed."
+                }),
+                errors => this.ToProblem(errors));
+        }
+
+        /// <summary>
         /// Deletes the signed-in caller's own account and signs them out.
         /// </summary>
         /// <remarks>

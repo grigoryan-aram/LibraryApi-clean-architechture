@@ -269,25 +269,32 @@ a {
     background: rgb(255 107 107 / 22%);
 }
 
-/* ---------- account deletion ---------- */
+/* ---------- account settings (change password, deletion) ---------- */
 
-.danger-zone {
+.account-section {
     margin-top: 28px;
     padding-top: 18px;
     border-top: 1px solid var(--line);
     text-align: left;
 }
 
-.danger-zone > summary {
+.account-section > summary {
     cursor: pointer;
-    color: var(--danger);
     font-weight: 600;
     font-size: 14px;
 }
 
-.danger-zone > p {
+.account-section[open] > summary {
+    margin-bottom: 12px;
+}
+
+.account-section > p {
     font-size: 13.5px;
-    margin: 12px 0 14px;
+    margin: 0 0 14px;
+}
+
+.danger-zone > summary {
+    color: var(--danger);
 }
 
 /* ---------- home ---------- */
