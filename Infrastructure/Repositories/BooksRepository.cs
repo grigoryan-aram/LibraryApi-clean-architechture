@@ -1,5 +1,5 @@
-﻿using LibraryApi.Domain.RepositoryInterfaces;
-using LibraryApi.Domain.Entities;
+﻿using LibraryApi.Domain.Entities;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,7 +55,7 @@ namespace Infrastructure.Repositories
                 .ToListAsync(cancellationToken);
         }
 
-
+        // this is the UGLYEST thing ive ever written, but it works:0   (UNCLE BOB PLEASE SPARE ME IM STILL YOUNG, IM STILL LEARNING OK?)
         public async Task<(IReadOnlyList<BookModel> Items, int TotalCount)> SearchAsync(
             string? search,
             string? sortBy,
