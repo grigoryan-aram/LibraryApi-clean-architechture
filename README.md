@@ -34,11 +34,10 @@ A library-management Web API (books, categories, members, loans) built on **ASP.
 10. [Claude AI chat](#10-claude-ai-chat)
 11. [Blazor UI](#11-blazor-ui)
 12. [Cross-cutting concerns](#12-cross-cutting-concerns)
-13. [Getting started](#13-getting-started)
-14. [Configuration and secrets](#14-configuration-and-secrets)
-15. [Testing](#15-testing)
-16. [Deployment](#16-deployment)
-17. [Known limitations](#17-known-limitations)
+13. [Configuration and secrets](#13-configuration-and-secrets)
+14. [Testing](#14-testing)
+15. [Deployment](#15-deployment)
+16. [Known limitations](#16-known-limitations)
 
 ---
 
@@ -422,57 +421,7 @@ Components call `IMediator` directly, with no HTTP hop back into the same app. S
 
 ---
 
-## 13. Getting started
-
-### Prerequisites
-- .NET 10 SDK
-- SQL Server (LocalDB, Express, or a container)
-- *Optional:* Docker, for RabbitMQ
-- *Optional:* an Anthropic API key, for the chat feature
-
-### Run
-```bash
-git clone https://github.com/grigoryan-aram/LibraryApi-clean-architechture.git
-```
-
-Set the connection string (run from `LibraryApi/`):
-
-```bash
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=(localdb)\\MSSQLLocalDB;Database=LibraryDb;Trusted_Connection=True;TrustServerCertificate=True"
-```
-
-Build and run from the repository root:
-
-```bash
-dotnet build LibraryApi.slnx
-```
-
-```bash
-dotnet run --project LibraryApi/Presentation.csproj
-```
-
-The app listens on http://localhost:5021 and https://localhost:7157. The database is created and migrated on first start, and seeded with books and categories.
-
-### Optional: RabbitMQ
-```bash
-docker-compose up -d rabbitmq
-```
-The management UI is at http://localhost:15672. Then set `RabbitMq:Host`, `RabbitMq:Username` and `RabbitMq:Password` as user secrets.
-
-### EF Core migrations
-Run these from `LibraryApi/`, where the `dotnet-ef` tool version is pinned:
-
-```bash
-dotnet tool restore
-```
-
-```bash
-dotnet ef migrations add <Name> -p ../Infrastructure/Infrastructure.csproj -s Presentation.csproj
-```
-
----
-
-## 14. Configuration and secrets
+## 13. Configuration and secrets
 
 **No secret is stored in `appsettings*.json`.** Locally, use user secrets (run from `LibraryApi/`). In production, use environment variables, with a double underscore for nesting:
 
@@ -488,7 +437,7 @@ Non-secret settings stay in `appsettings.json`: SMTP host and port, Claude model
 
 ---
 
-## 15. Testing
+## 14. Testing
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -503,13 +452,13 @@ dotnet test LibraryApi.slnx
 
 ---
 
-## 16. Deployment
+## 15. Deployment
 
 A Web Deploy publish profile (`LibraryApi/Properties/PublishProfiles/`) publishes a Release build to a MonsterASP hosting site. Production secrets come from host environment variables. The free plan has no TLS certificate, so `Security:RequireHttps` is `false` in `appsettings.Production.json`. The app logs a warning on every start while that is the case.
 
 ---
 
-## 17. Known limitations
+## 16. Known limitations
 
 - **No HTTPS in the current production hosting**, so credentials and cookies travel in clear text. Enable `Security:RequireHttps` once a certificate is available.
 - **Two simultaneous loans can race past the availability check.** The count and the insert are not locked together.
