@@ -34,10 +34,9 @@ A library-management Web API (books, categories, members, loans) built on **ASP.
 10. [Claude AI chat](#10-claude-ai-chat)
 11. [Blazor UI](#11-blazor-ui)
 12. [Cross-cutting concerns](#12-cross-cutting-concerns)
-13. [Configuration and secrets](#13-configuration-and-secrets)
-14. [Testing](#14-testing)
-15. [Deployment](#15-deployment)
-16. [Known limitations](#16-known-limitations)
+13. [Testing](#13-testing)
+14. [Deployment](#14-deployment)
+15. [Known limitations](#15-known-limitations)
 
 ---
 
@@ -421,23 +420,7 @@ Components call `IMediator` directly, with no HTTP hop back into the same app. S
 
 ---
 
-## 13. Configuration and secrets
-
-**No secret is stored in `appsettings*.json`.** Locally, use user secrets (run from `LibraryApi/`). In production, use environment variables, with a double underscore for nesting:
-
-| Setting | Purpose |
-|---|---|
-| `ConnectionStrings__DefaultConnection` | SQL Server (required) |
-| `Email__User`, `Email__Password` | SMTP credentials |
-| `Claude__ApiKey` (or `ANTHROPIC_API_KEY`) | AI chat |
-| `Identity__Admin__UserName`, `__Email`, `__Password` | Seed administrator (none is created if any is missing) |
-| `RabbitMq__Host`, `__Username`, `__Password` | Message broker (events are disabled if any is missing) |
-
-Non-secret settings stay in `appsettings.json`: SMTP host and port, Claude model and limits, `Loans:LoanPeriodDays`, `Security:RequireHttps`, and the Serilog levels.
-
----
-
-## 14. Testing
+## 13. Testing
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -452,13 +435,13 @@ dotnet test LibraryApi.slnx
 
 ---
 
-## 15. Deployment
+## 14. Deployment
 
 A Web Deploy publish profile (`LibraryApi/Properties/PublishProfiles/`) publishes a Release build to a MonsterASP hosting site. Production secrets come from host environment variables. The free plan has no TLS certificate, so `Security:RequireHttps` is `false` in `appsettings.Production.json`. The app logs a warning on every start while that is the case.
 
 ---
 
-## 16. Known limitations
+## 15. Known limitations
 
 - **No HTTPS in the current production hosting**, so credentials and cookies travel in clear text. Enable `Security:RequireHttps` once a certificate is available.
 - **Two simultaneous loans can race past the availability check.** The count and the insert are not locked together.
