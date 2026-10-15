@@ -112,6 +112,22 @@ namespace Infrastructure.Repositories
         }
 
 
+        public async Task<bool> LockForLendingAsync(
+            int id,
+            CancellationToken cancellationToken)
+        {
+            // A no-op UPDATE rather than a SELECT WITH (UPDLOCK): it takes an
+            // exclusive row lock held to commit on SQL Server, and stays
+            // portable, so the SQLite tests can run it.
+            var touched = await _context.Books
+                .Where(b => b.Id == id)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(b => b.TotalCopies, b => b.TotalCopies),
+                    cancellationToken);
+
+            return touched > 0;
+        }
+
         public async Task<BookModel?> GetByIdAsync(
             int id,
             CancellationToken cancellationToken)

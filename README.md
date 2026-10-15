@@ -265,6 +265,7 @@ Loans are where the real domain rules live:
 - **`POST /api/Loans` accepts only `{ bookId, memberId }`.** `BorrowedAt` and `DueAt` are stamped from the server clock, because a caller who could choose their borrow date could choose their due date too.
 - **Ids are checked before insert.** An unknown book or member returns `404 Loans.BookNotFound` / `Loans.MemberNotFound` rather than a foreign-key violation and a 500.
 - **Availability is computed, never stored**: `TotalCopies` minus open loans, counted in SQL. When every copy is out, the request gets `409 Loans.NoCopiesAvailable`.
+- **Concurrent loans of the same book are serialised.** The handler locks the book row at the start of the lending transaction, so two requests for the last copy cannot both succeed.
 - **Returning is the only way a loan changes.** `POST /api/Loans/{id}/return` refuses a second return (`Loans.AlreadyReturned`). There is deliberately no general update endpoint, because rewriting `BorrowedAt` or `DueAt` would corrupt the record.
 - **The loan period** is `Loans:LoanPeriodDays` (default 14). A value of 0 or less falls back to 14.
 - **`DueAt` is stored**, so changing the period affects only new loans.
@@ -444,7 +445,6 @@ A Web Deploy publish profile (`LibraryApi/Properties/PublishProfiles/`) publishe
 ## 15. Known limitations
 
 - **No HTTPS in the current production hosting**, so credentials and cookies travel in clear text. Enable `Security:RequireHttps` once a certificate is available.
-- **Two simultaneous loans can race past the availability check.** The count and the insert are not locked together.
 - **Timestamps are read back without `DateTimeKind.Utc`**, so `GET` responses omit the `Z` suffix.
 - **Chat history and AI usage limits are in-memory**: per instance, and reset on restart.
 - **Transitive MailKit/MimeKit 2.10.1 advisories** (via FluentEmail.MailKit 3.0.2) cannot be patched by a version override; fixing them means replacing the email sender.

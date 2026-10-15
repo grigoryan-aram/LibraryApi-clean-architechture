@@ -205,4 +205,26 @@ public class BooksRepositoryTests : IDisposable
         await using var reader = _database.NewContext();
         Assert.Equal("Dune", (await reader.Books.SingleAsync(b => b.Id == saved.Id)).Title);
     }
+
+    [Fact]
+    public async Task Lock_for_lending_finds_an_existing_book_and_leaves_it_unchanged()
+    {
+        await GivenBooks(("Dune", "Frank Herbert"));
+        var id = (await _database.NewContext().Books.SingleAsync()).Id;
+
+        var locked = await CreateSut().LockForLendingAsync(id, CancellationToken.None);
+
+        Assert.True(locked);
+        await using var reader = _database.NewContext();
+        var book = await reader.Books.SingleAsync();
+        Assert.Equal(("Dune", 1), (book.Title, book.TotalCopies));
+    }
+
+    [Fact]
+    public async Task Lock_for_lending_reports_a_book_that_does_not_exist()
+    {
+        var locked = await CreateSut().LockForLendingAsync(404, CancellationToken.None);
+
+        Assert.False(locked);
+    }
 }

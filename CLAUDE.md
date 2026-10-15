@@ -56,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (333 tests across three projects, all passing):
+Test (338 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -151,7 +151,7 @@ Things that will bite:
 
 - **`UpdateBookCommand` refuses to cut `TotalCopies` below what is on loan** (`Books.CopiesBelowActiveLoans`), or the clamp above would swallow the shortfall.
 
-- **Two callers can still race past the availability check** — the count and the insert are separate statements with no lock between them. Not prevented; fixing it needs a transaction with the right isolation level, or a row per copy.
+- **The availability check is serialised per book.** `AddLoanCommandHandler` runs the book read, the count, the insert and the event in one transaction that begins with `IBooksRepository.LockForLendingAsync` — a no-op `UPDATE Books SET TotalCopies = TotalCopies`, which holds an exclusive row lock to commit. A second loan of the same book waits there and then counts the first. A no-op `UPDATE` rather than `SELECT … WITH (UPDLOCK, HOLDLOCK)` so it also runs on SQLite; the SQLite tests can only show it finds the row, not that it blocks. Measured on LocalDB: 10 concurrent requests for one copy gave 10 loans without the lock, 1 loan and 9 `Loans.NoCopiesAvailable` with it. `UpdateBookCommandHandler`'s `CopiesBelowActiveLoans` check is still unlocked and can race a concurrent loan.
 - **Timestamps come back from the database with no `DateTimeKind`.** The values are UTC, and every server-side comparison is therefore correct, but `POST` echoes `…Z` while `GET` returns the same instant without it. A client that parses the unsuffixed form as local time will compute overdue wrongly. Storing `DateTimeOffset`, or stamping `DateTimeKind.Utc` on read, is the fix.
 - **`AddMemberCommand` takes only a name.** It used to require a client-supplied `id` greater than 0, so creating a member meant choosing your own primary key; the identity column assigns it now, and the handler builds the entity by hand rather than adapting the command precisely so `Id` stays 0. Members are still not seeded (see `MembersConfiguration`, which explains why a `HasData` block there would break startup on any database that already holds members) — but **registration now creates one**, so a fresh database gets its first member as soon as somebody signs up.
 
