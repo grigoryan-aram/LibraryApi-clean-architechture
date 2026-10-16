@@ -9,9 +9,15 @@ namespace Infrastructure.UnitTests.Services;
 
 public class InMemoryAiUsageLimiterTests
 {
-    private static InMemoryAiUsageLimiter CreateSut(int rateLimitHours = 24) =>
+    private static InMemoryAiUsageLimiter CreateSut(
+        int rateLimitHours = 24,
+        int messagesPerWindow = 1) =>
         new(new MemoryCache(new MemoryCacheOptions()),
-            Options.Create(new ClaudeSettings { RateLimitHours = rateLimitHours }),
+            Options.Create(new ClaudeSettings
+            {
+                RateLimitHours = rateLimitHours,
+                MessagesPerWindow = messagesPerWindow
+            }),
             NullLogger<InMemoryAiUsageLimiter>.Instance);
 
     [Fact]
@@ -20,6 +26,7 @@ public class InMemoryAiUsageLimiterTests
         var decision = CreateSut().Check("ada");
 
         Assert.True(decision.Allowed);
+        Assert.False(decision.Disabled);
         Assert.Equal(TimeSpan.Zero, decision.RetryAfter);
     }
 
@@ -32,7 +39,22 @@ public class InMemoryAiUsageLimiterTests
         var decision = sut.Check("ada");
 
         Assert.False(decision.Allowed);
+        Assert.False(decision.Disabled);
         Assert.InRange(decision.RetryAfter, TimeSpan.FromHours(23), TimeSpan.FromHours(24));
+    }
+
+    [Fact]
+    public void Allows_as_many_messages_as_configured_and_refuses_the_next()
+    {
+        var sut = CreateSut(messagesPerWindow: 3);
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.True(sut.Check("ada").Allowed);
+            sut.Record("ada");
+        }
+
+        Assert.False(sut.Check("ada").Allowed);
     }
 
     // One caller burning their message must not lock anyone else out.
@@ -55,9 +77,27 @@ public class InMemoryAiUsageLimiterTests
         Assert.True(sut.Check("ada").Allowed);
     }
 
-    [Fact]
-    public void Defaults_to_a_24_hour_window()
+    // Zero messages wins over a zero window: "no cap" must not reopen an
+    // assistant someone deliberately turned off.
+    [Theory]
+    [InlineData(24)]
+    [InlineData(0)]
+    public void Refuses_everyone_when_zero_messages_are_allowed(int rateLimitHours)
     {
-        Assert.Equal(24, new ClaudeSettings().RateLimitHours);
+        var sut = CreateSut(rateLimitHours, messagesPerWindow: 0);
+
+        var decision = sut.Check("ada");
+
+        Assert.False(decision.Allowed);
+        Assert.True(decision.Disabled);
+        Assert.False(sut.Check("someone-who-never-asked").Allowed);
+    }
+
+    [Fact]
+    public void Defaults_to_one_message_per_24_hours()
+    {
+        var settings = new ClaudeSettings();
+
+        Assert.Equal((24, 1), (settings.RateLimitHours, settings.MessagesPerWindow));
     }
 }

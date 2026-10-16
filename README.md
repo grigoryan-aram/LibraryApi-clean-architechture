@@ -387,7 +387,7 @@ Notes:
 - `ClaudeAIController` → `AskClaudeQuery` → `AskClaudeQueryHandler` → `IClaudeService` → `ClaudeService` (official Anthropic SDK).
 - Leave `conversationId` empty to start a chat. The reply returns an id to send on the next call.
 - History is stored in memory (`IMemoryCache`, 30-minute sliding expiry) and capped at 20 messages. Messages are capped at 4000 characters.
-- **Usage is limited to one message per user per 24 hours** (`Claude:RateLimitHours`). The limit is enforced in the handler rather than on the endpoint, so it covers both the API and the Blazor page. An allowance is spent only when Claude actually answers.
+- **Usage is limited to `Claude:MessagesPerWindow` messages per user per `Claude:RateLimitHours` hours.** Setting `MessagesPerWindow` to `0` turns the assistant off for everyone, answering `403 Claude.Disabled`. **It is currently `0`, so the chat is off.** The limit is enforced in the handler rather than on the endpoint, so it covers both the API and the Blazor page. An allowance is spent only when Claude actually answers.
 - Calls are non-streaming so Swagger can display them. SDK exceptions are mapped to `Claude.*` errors.
 
 ---

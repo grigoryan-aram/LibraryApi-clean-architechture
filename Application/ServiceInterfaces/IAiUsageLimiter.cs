@@ -1,8 +1,10 @@
 namespace Application.ServiceInterfaces
 {
+    // Disabled means nobody may chat at all, so there is no retry time to give.
     public sealed record AiUsageDecision(
         bool Allowed,
-        TimeSpan RetryAfter);
+        TimeSpan RetryAfter,
+        bool Disabled = false);
 
     // Caps how often one caller may reach Claude. This lives behind the
     // handler rather than in ASP.NET Core's rate limiter on purpose: the

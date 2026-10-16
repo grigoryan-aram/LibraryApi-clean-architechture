@@ -33,6 +33,17 @@ namespace Application.Features.ClaudeAI.Queries
         {
             var allowance = _usageLimiter.Check(request.Requester);
 
+            if (allowance.Disabled)
+            {
+                _logger.LogInformation(
+                    "Refused a Claude request from {Requester}: the assistant is turned off.",
+                    request.Requester);
+
+                return Error.Forbidden(
+                    "Claude.Disabled",
+                    "The assistant is turned off.");
+            }
+
             if (!allowance.Allowed)
             {
                 _logger.LogWarning(

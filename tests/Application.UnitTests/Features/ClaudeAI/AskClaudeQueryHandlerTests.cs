@@ -194,6 +194,26 @@ public class AskClaudeQueryHandlerTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Turned off for everyone, so "try again in 0 minutes" would be a lie.
+    [Fact]
+    public async Task Refuses_every_message_when_the_assistant_is_turned_off()
+    {
+        _usageLimiter
+            .Setup(l => l.Check(Requester))
+            .Returns(new AiUsageDecision(false, TimeSpan.Zero, Disabled: true));
+
+        var result = await CreateSut().Handle(
+            new AskClaudeQuery("hello", null, Requester),
+            CancellationToken.None);
+
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Forbidden, result.FirstError.Type);
+        Assert.Equal("Claude.Disabled", result.FirstError.Code);
+        _claudeService.Verify(s => s.AskAsync(
+            It.IsAny<IReadOnlyList<ChatMessageDTO>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task Spends_the_allowance_only_once_claude_has_answered()
     {
