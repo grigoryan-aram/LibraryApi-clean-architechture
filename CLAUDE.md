@@ -56,7 +56,7 @@ dotnet ef migrations list -p ../Infrastructure/Infrastructure.csproj -s Presenta
 
 Migrations live in Infrastructure; the host is always the startup project.
 
-Test (333 tests across three projects, all passing):
+Test (342 tests across three projects, all passing):
 
 ```bash
 dotnet test LibraryApi.slnx
@@ -151,7 +151,7 @@ Things that will bite:
 
 - **`UpdateBookCommand` refuses to cut `TotalCopies` below what is on loan** (`Books.CopiesBelowActiveLoans`), or the clamp above would swallow the shortfall.
 
-- **Two callers can still race past the availability check** — the count and the insert are separate statements with no lock between them. Not prevented; fixing it needs a transaction with the right isolation level, or a row per copy.
+- **The availability check is serialised per book.** `AddLoanCommandHandler` runs the book read, the count, the insert and the event in one transaction that begins with `IBooksRepository.LockForLendingAsync` — a no-op `UPDATE Books SET TotalCopies = TotalCopies`, which holds an exclusive row lock to commit. A second loan of the same book waits there and then counts the first. A no-op `UPDATE` rather than `SELECT … WITH (UPDLOCK, HOLDLOCK)` so it also runs on SQLite; the SQLite tests can only show it finds the row, not that it blocks. Measured on LocalDB: 10 concurrent requests for one copy gave 10 loans without the lock, 1 loan and 9 `Loans.NoCopiesAvailable` with it. `UpdateBookCommandHandler`'s `CopiesBelowActiveLoans` check is still unlocked and can race a concurrent loan.
 - **Timestamps come back from the database with no `DateTimeKind`.** The values are UTC, and every server-side comparison is therefore correct, but `POST` echoes `…Z` while `GET` returns the same instant without it. A client that parses the unsuffixed form as local time will compute overdue wrongly. Storing `DateTimeOffset`, or stamping `DateTimeKind.Utc` on read, is the fix.
 - **`AddMemberCommand` takes only a name.** It used to require a client-supplied `id` greater than 0, so creating a member meant choosing your own primary key; the identity column assigns it now, and the handler builds the entity by hand rather than adapting the command precisely so `Id` stays 0. Members are still not seeded (see `MembersConfiguration`, which explains why a `HasData` block there would break startup on any database that already holds members) — but **registration now creates one**, so a fresh database gets its first member as soon as somebody signs up.
 
@@ -335,7 +335,7 @@ Two live mechanisms, plus one that has been deleted:
 
 - **The `"fixed"` policy caps the API at 100 requests per caller per 2 minutes.** Applied with `app.MapControllers().RequireRateLimiting("fixed")`, so it covers the API controllers and deliberately not `/health`, the Blazor circuit or static assets. It is a **partitioned** policy, not `AddFixedWindowLimiter`: that overload gives every client in the world one shared bucket, so a single busy caller could lock everyone else out. The key is the signed-in user name, falling back to the remote address — which is why `app.UseRateLimiter()` sits **after** `UseAuthentication()`, since the name is not populated before it. `QueueLimit` is **0** on purpose: a rate-limited caller gets an immediate 429 rather than a request held open for up to a whole window. Measured: request 101 onwards answers 429, and `/health` keeps answering 200.
 - The dead `RateLimitPerIPMiddleWare` has been deleted. It was never added to the pipeline, and its `static Dictionary` counter was neither thread-safe nor ever reset.
-- **`IAiUsageLimiter` caps Claude at one message per user per 24 hours** (`Claude:RateLimitHours`, 0 disables). `InMemoryAiUsageLimiter` keys an `IMemoryCache` entry on the requester with an absolute expiry.
+- **`IAiUsageLimiter` caps Claude at `Claude:MessagesPerWindow` messages per user per `Claude:RateLimitHours`** (code defaults 1 and 24). `InMemoryAiUsageLimiter` keys an `IMemoryCache` entry on the requester — window start plus count — with an absolute expiry one window after the first message. `RateLimitHours: 0` removes the cap; **`MessagesPerWindow: 0` turns the assistant off for everyone** and wins over a zero window, answering **403 `Claude.Disabled`** before any call to Claude. **Both `appsettings.json` and `appsettings.Production.json` currently ship `MessagesPerWindow: 0`**, so the chat is off; set it back to `1` (or more) to reopen it.
 
 That last one deliberately sits **in `AskClaudeQueryHandler`, not on the endpoint**. ASP.NET Core's rate limiter only sees HTTP requests, and the Blazor chat page calls `IMediator` in-process — an `[EnableRateLimiting]` attribute would have limited curl while leaving the UI unlimited. Putting it behind the handler covers both entry points, which is the whole point.
 

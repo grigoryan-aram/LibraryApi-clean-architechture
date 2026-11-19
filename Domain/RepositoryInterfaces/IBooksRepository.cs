@@ -11,6 +11,11 @@ namespace LibraryApi.Domain.RepositoryInterfaces
         Task<BookModel?> GetByIdAsync(int id, CancellationToken cancellationToken);
         Task<IReadOnlyList<BookModel>> GetAllAsync(CancellationToken cancellationToken);
 
+        // Row-locks the book until the surrounding transaction ends, so two
+        // loans of the same book cannot both pass the availability check.
+        // False when no such book exists. Call it inside a transaction.
+        Task<bool> LockForLendingAsync(int id, CancellationToken cancellationToken);
+
         // Filtering, ordering and paging all happen in SQL. Returns the total
         // matching count alongside the page, because the caller cannot work it
         // out from a page it has already been truncated to.

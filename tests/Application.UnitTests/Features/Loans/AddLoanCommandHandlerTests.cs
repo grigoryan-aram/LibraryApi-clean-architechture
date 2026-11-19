@@ -39,9 +39,13 @@ public class AddLoanCommandHandlerTests
             _unitOfWork,
             NullLogger<AddLoanCommandHandler>.Instance);
 
-    private void GivenBookExists(int id = 1, int totalCopies = 1) =>
+    private void GivenBookExists(int id = 1, int totalCopies = 1)
+    {
+        _books.Setup(repo => repo.LockForLendingAsync(id, It.IsAny<CancellationToken>()))
+              .ReturnsAsync(true);
         _books.Setup(repo => repo.GetByIdAsync(id, It.IsAny<CancellationToken>()))
               .ReturnsAsync(new BookModel { Id = id, Title = "Dune", TotalCopies = totalCopies });
+    }
 
     private void GivenCopiesOnLoan(int count, int bookId = 1) =>
         _loans.Setup(repo => repo.CountActiveLoansForBookAsync(bookId, It.IsAny<CancellationToken>()))
@@ -216,5 +220,62 @@ public class AddLoanCommandHandlerTests
 
         _loans.Verify(repo => repo.CountActiveLoansForBookAsync(
             It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // Two requests for the last copy used to both count it free, because the
+    // count ran outside any transaction and nothing held the book in between.
+    [Fact]
+    public async Task Locks_the_book_before_counting_and_inserts_under_the_same_transaction()
+    {
+        var calls = new List<string>();
+        GivenBookExists();
+        GivenMemberExists();
+        GivenTheLoanIsSaved();
+        _books.Setup(repo => repo.LockForLendingAsync(1, It.IsAny<CancellationToken>()))
+              .Callback(() => calls.Add("lock"))
+              .ReturnsAsync(true);
+        _loans.Setup(repo => repo.CountActiveLoansForBookAsync(1, It.IsAny<CancellationToken>()))
+              .Callback(() => calls.Add("count"))
+              .ReturnsAsync(0);
+        _loans.Setup(repo => repo.AddLoanAsync(It.IsAny<LoanModel>(), It.IsAny<CancellationToken>()))
+              .Callback(() => calls.Add("insert"))
+              .ReturnsAsync((LoanModel loan, CancellationToken _) => loan);
+
+        var result = await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.False(result.IsError);
+        Assert.Equal(["lock", "count", "insert"], calls);
+        Assert.Equal(1, _unitOfWork.Commits);
+    }
+
+    // The refusal is decided inside the transaction, so it releases the lock
+    // by rolling back rather than leaving anything committed.
+    [Fact]
+    public async Task Rolls_back_when_every_copy_is_out()
+    {
+        GivenBookExists(totalCopies: 1);
+        GivenMemberExists();
+        GivenCopiesOnLoan(1);
+
+        await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.Equal(1, _unitOfWork.Rollbacks);
+        Assert.Equal(0, _unitOfWork.Commits);
+    }
+
+    // The lock finds no row: the book was deleted, or never existed.
+    [Fact]
+    public async Task Refuses_a_book_that_cannot_be_locked()
+    {
+        GivenBookExists();
+        GivenMemberExists();
+        _books.Setup(repo => repo.LockForLendingAsync(1, It.IsAny<CancellationToken>()))
+              .ReturnsAsync(false);
+
+        var result = await CreateSut().Handle(Command, CancellationToken.None);
+
+        Assert.Equal("Loans.BookNotFound", result.FirstError.Code);
+        _loans.Verify(repo => repo.AddLoanAsync(
+            It.IsAny<LoanModel>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

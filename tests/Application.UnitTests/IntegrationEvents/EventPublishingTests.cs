@@ -60,6 +60,8 @@ public class EventPublishingTests
 
     private void GivenALendableBookAndMember()
     {
+        _books.Setup(r => r.LockForLendingAsync(1, It.IsAny<CancellationToken>()))
+              .ReturnsAsync(true);
         _books.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
               .ReturnsAsync(new BookModel { Id = 1, Title = "Dune", TotalCopies = 2 });
         _members.Setup(r => r.GetMemberByIdAsync(2, It.IsAny<CancellationToken>()))

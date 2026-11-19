@@ -12,8 +12,12 @@ namespace Infrastructure.Settings
 
         public int MaxTokens { get; set; } = 16000;
 
-        // One message per caller per this many hours. 0 disables the cap.
+        // The window MessagesPerWindow is counted over. 0 disables the cap.
         public int RateLimitHours { get; set; } = 24;
+
+        // Messages per caller per window. 0 turns the assistant off for
+        // everyone, whatever RateLimitHours says.
+        public int MessagesPerWindow { get; set; } = 1;
 
         public string SystemPrompt { get; set; } =
             "You are the assistant embedded in a library management API. " +

@@ -1,5 +1,5 @@
-﻿using LibraryApi.Domain.RepositoryInterfaces;
-using LibraryApi.Domain.Entities;
+﻿using LibraryApi.Domain.Entities;
+using LibraryApi.Domain.RepositoryInterfaces;
 using LibraryApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,7 +55,7 @@ namespace Infrastructure.Repositories
                 .ToListAsync(cancellationToken);
         }
 
-
+        // this is the UGLYEST thing ive ever written, but it works:0   (UNCLE BOB PLEASE SPARE ME IM STILL YOUNG, IM STILL LEARNING OK?)
         public async Task<(IReadOnlyList<BookModel> Items, int TotalCount)> SearchAsync(
             string? search,
             string? sortBy,
@@ -111,6 +111,22 @@ namespace Infrastructure.Repositories
             return (items, totalCount);
         }
 
+
+        public async Task<bool> LockForLendingAsync(
+            int id,
+            CancellationToken cancellationToken)
+        {
+            // A no-op UPDATE rather than a SELECT WITH (UPDLOCK): it takes an
+            // exclusive row lock held to commit on SQL Server, and stays
+            // portable, so the SQLite tests can run it.
+            var touched = await _context.Books
+                .Where(b => b.Id == id)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(b => b.TotalCopies, b => b.TotalCopies),
+                    cancellationToken);
+
+            return touched > 0;
+        }
 
         public async Task<BookModel?> GetByIdAsync(
             int id,
