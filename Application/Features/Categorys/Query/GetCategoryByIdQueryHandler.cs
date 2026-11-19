@@ -26,7 +26,7 @@ namespace Application.Features.Categorys.Query
 
             var category = await _categorysRepository.GetCategoryByIdAsync(request.Id, cancellationToken);
 
-            if (category == null)
+            if (category is null)
             {
                 _logger.LogWarning("No category with id {CategoryId}.", request.Id);
 

@@ -32,7 +32,7 @@ namespace Application.Features.Members.Commands
 
             var result = await _membersRepository.AddMemberAsync(member, cancellationToken);
 
-            if (result == null)
+            if (result is null)
             {
                 _logger.LogError(
                     "The members repository returned no row when adding {Name}.",

@@ -32,7 +32,7 @@ namespace Application.Features.Books.Queries
         {
             var books = await _booksRepository.GetAllAsync(cancellationToken);
 
-            if (books == null)
+            if (books is null)
             {
                 _logger.LogError("The books repository returned no collection.");
 

@@ -30,7 +30,7 @@ namespace Application.Features.Books.Queries
 
             var book = await _booksRepository.GetByIdAsync(request.id, cancellationToken);
 
-            if (book == null)
+            if (book is null)
             {
                 _logger.LogWarning("No book with id {BookId}.", request.id);
 

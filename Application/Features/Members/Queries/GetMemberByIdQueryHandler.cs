@@ -29,7 +29,7 @@ namespace Application.Features.Members.Queries
             var result = await _membersRepository.GetMemberByIdAsync(member.Id, cancellationToken);
 
 
-            if (result == null)
+            if (result is null)
             {
                 _logger.LogWarning("No member with id {MemberId}.", member.Id);
 

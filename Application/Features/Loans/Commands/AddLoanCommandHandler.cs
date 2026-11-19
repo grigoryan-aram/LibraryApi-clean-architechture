@@ -111,7 +111,7 @@ namespace Application.Features.Loans.Commands
             {
                 var saved = await _loansRepository.AddLoanAsync(loan, token);
 
-                if (saved == null)
+                if (saved is null)
                 {
                     _logger.LogError(
                         "The loans repository returned no row when lending book " +

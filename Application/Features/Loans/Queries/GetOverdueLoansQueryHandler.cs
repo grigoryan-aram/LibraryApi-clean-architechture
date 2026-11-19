@@ -30,7 +30,7 @@ namespace Application.Features.Loans.Queries
                 cancellationToken);
 
             var loansDTO = loans.Adapt<IReadOnlyList<LoansDTO>>();
-
+             
             _logger.LogInformation(
                 "Returned {LoanCount} overdue loans.",
                 loansDTO.Count);

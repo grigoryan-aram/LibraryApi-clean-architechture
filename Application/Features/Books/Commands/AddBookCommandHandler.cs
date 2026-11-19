@@ -33,7 +33,7 @@ namespace Application.Features.Books.Commands
                 request.CategoryId,
                 cancellationToken);
 
-            if (category == null)
+            if (category is null)
             {
                 _logger.LogWarning(
                     "Rejected adding book {Title}: no category with id {CategoryId}.",
@@ -49,7 +49,7 @@ namespace Application.Features.Books.Commands
                 request.Adapt<BookModel>(),
                 cancellationToken);
 
-            if (book == null)
+            if (book is null)
             {
                 _logger.LogError(
                     "The books repository returned no row when adding {Title}.",

@@ -24,7 +24,7 @@ namespace Application.Features.Members.Queries
         {
             var members = await _membersRepository.GetMembersAsync(cancellationToken);
 
-            if (members == null)
+            if (members is null)
             {
                 _logger.LogError("The members repository returned no collection.");
 

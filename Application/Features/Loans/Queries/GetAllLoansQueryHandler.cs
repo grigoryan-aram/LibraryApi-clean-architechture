@@ -27,7 +27,7 @@ namespace Application.Features.Loans.Queries
 
             var loans = await _loansRepository.GetAllLoansAsync(cancellationToken);
 
-            if (loans == null)
+            if (loans is null)
             {
                 _logger.LogError("The loans repository returned no collection.");
 

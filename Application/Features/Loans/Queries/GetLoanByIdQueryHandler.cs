@@ -30,7 +30,7 @@ namespace Application.Features.Loans.Queries
 
             var result = await _loansRepository.GetLoanByIdAsync(loan.Id, cancellationToken);
 
-            if (result == null)
+            if (result is null)
             {
                 _logger.LogWarning("No loan with id {LoanId}.", loan.Id);
 

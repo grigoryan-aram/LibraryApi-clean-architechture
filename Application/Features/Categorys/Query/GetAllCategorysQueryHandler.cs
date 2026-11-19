@@ -28,7 +28,7 @@ namespace Application.Features.Categorys.Query
 
             var categories = await _categorysRepository.GetAllCategoriesAsync(cancellationToken);
 
-            if (categories == null)
+            if (categories is null)
             {
                 _logger.LogError("The categorys repository returned no collection.");
 

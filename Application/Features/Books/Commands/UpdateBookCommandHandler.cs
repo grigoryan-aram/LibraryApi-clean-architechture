@@ -33,7 +33,7 @@ namespace Application.Features.Books.Commands
         {
             var book = await _booksRepository.GetByIdAsync(request.Id, cancellationToken);
 
-            if (book == null)
+            if (book is null)
             {
                 _logger.LogWarning(
                     "Rejected updating book {BookId}: no such book.",
@@ -48,7 +48,7 @@ namespace Application.Features.Books.Commands
                 request.CategoryId,
                 cancellationToken);
                 
-            if (category == null)
+            if (category is null)
             {
                 _logger.LogWarning(
                     "Rejected updating book {BookId}: no category with id {CategoryId}.",
